@@ -29,17 +29,17 @@ else {
 			--higrid-box-bg: #ffffff;
 			--higrid-box-border: #ccd5db;
 			--higrid-box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-			--higrid-text: inherit;
+			--higrid-text: #1f2328;
 			--higrid-header-border: #e4e9ec;
 			--higrid-row-border: #eef1f3;
 		}
 		:root[color-scheme="dark"] .higrid-wrap {
-			--higrid-box-bg: #26282b;
-			--higrid-box-border: #3a3f44;
-			--higrid-box-shadow: 0 1px 2px rgba(0,0,0,0.4);
-			--higrid-text: #e6e6e6;
-			--higrid-header-border: #3a3f44;
-			--higrid-row-border: #2f3236;
+			--higrid-box-bg: #ededed;
+			--higrid-box-border: #bfc6cb;
+			--higrid-box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+			--higrid-text: #1f2328;
+			--higrid-header-border: #d4d9dc;
+			--higrid-row-border: #dde1e4;
 		}
 		.higrid-wrap { display: grid; gap: 12px; padding: 12px; height: 100%; overflow-y: auto; box-sizing: border-box; align-content: start; }
 		.higrid-box {
@@ -113,7 +113,6 @@ else {
 			box-shadow: 0 6px 24px rgba(0,0,0,0.25);
 		}
 		dialog.higrid-dialog::backdrop { background: rgba(0,0,0,0.35); }
-		:root[color-scheme="dark"] dialog.higrid-dialog { background: #26282b; color: #e6e6e6; border-color: #3a3f44; }
 		.higrid-dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid rgba(128,128,128,0.25); font-weight: 600; }
 		.higrid-dlg-close { background: transparent; border: 0; font-size: 18px; cursor: pointer; color: inherit; line-height: 1; padding: 0 4px; }
 		.higrid-dlg-body { padding: 12px 14px; max-height: 60vh; overflow-y: auto; }

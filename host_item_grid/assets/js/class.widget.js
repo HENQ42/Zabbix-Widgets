@@ -64,25 +64,30 @@ class CWidgetHostItemGrid extends CWidget {
             'position:absolute;inset:0;background:rgba(0,0,0,0.55);z-index:100;' +
             'display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box;';
 
+        const isDark = document.documentElement.getAttribute('color-scheme') === 'dark';
+        const popupBg = isDark ? '#ededed' : '#ffffff';
+        const popupBorder = isDark ? '#bfc6cb' : '#ccd5db';
+        const popupText = '#1f2328';
+
         const box = document.createElement('div');
         box.style.cssText =
-            'background:var(--color-bg, #ffffff);border:1px solid rgba(128,128,128,0.3);border-radius:6px;' +
+            'background:' + popupBg + ';border:1px solid ' + popupBorder + ';border-radius:6px;color:' + popupText + ';' +
             'width:100%;max-width:520px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6);';
 
         const head = document.createElement('div');
         head.style.cssText =
             'display:flex;align-items:center;justify-content:space-between;' +
-            'padding:10px 14px;border-bottom:1px solid rgba(128,128,128,0.2);flex-shrink:0;';
+            'padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.12);flex-shrink:0;';
 
         const title = document.createElement('span');
         title.textContent = 'Problemas em ' + hour;
-        title.style.cssText = 'font-size:12px;font-weight:600;color:var(--font-color, inherit);';
+        title.style.cssText = 'font-size:12px;font-weight:600;color:' + popupText + ';';
 
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.textContent = '✕';
         closeBtn.style.cssText =
-            'background:none;border:none;color:var(--font-color, inherit);cursor:pointer;font-size:14px;' +
+            'background:none;border:none;color:' + popupText + ';cursor:pointer;font-size:14px;' +
             'opacity:0.6;padding:2px 6px;border-radius:3px;';
         closeBtn.addEventListener('click', () => this.#hideOverlay());
 
