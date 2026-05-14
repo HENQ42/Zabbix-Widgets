@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "host_item_grid",
+    "type": "widget",
+    "name": "Host Item Grid",
+    "namespace": "HostItemGrid",
+    "version": "1.0",
+    "description": "Exibe uma grade de boxes por host, cada um listando valores de itens (mesmas chaves em todos os hosts) com regex, cores e negrito.",
+    "author": "Custom",
+    "assets": {
+        "js": ["class.widget.js"]
+    },
+    "actions": {
+        "widget.host_item_grid.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Host Item Grid",
+        "js_class": "CWidgetHostItemGrid",
+        "size": { "width": 24, "height": 10 }
+    }
+}

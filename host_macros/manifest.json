@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "host_macros",
+    "type": "widget",
+    "name": "Host Macros",
+    "namespace": "HostMacros",
+    "version": "1.0",
+    "description": "Exibe macros de host: todas as macros de um host ou uma macro específica de todos os hosts de um grupo.",
+    "author": "Custom",
+    "assets": {
+        "js": ["class.widget.js"]
+    },
+    "actions": {
+        "widget.host_macros.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Host Macros",
+        "js_class": "CWidgetHostMacros",
+        "size": { "width": 24, "height": 8 }
+    }
+}
