@@ -1,0 +1,20 @@
+{
+    "manifest_version": 2.0,
+    "id": "sla_podium",
+    "type": "widget",
+    "name": "SLA Podium",
+    "namespace": "SlaPodium",
+    "version": "1.0",
+    "description": "Mostra os 3 piores SLAs em destaque + card de resumo da frota, com lista rolavel para os demais.",
+    "author": "Custom",
+    "actions": {
+        "widget.sla_podium.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "SLA Podium",
+        "size": { "width": 24, "height": 8 }
+    }
+}
