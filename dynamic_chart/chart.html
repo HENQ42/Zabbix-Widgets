@@ -80,15 +80,26 @@
       + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
 
-  function fmtValue(v) {
+  function fmtValue(v, isInt) {
     if (v === null || v === undefined) return '';
     const a = Math.abs(v);
+    if (isInt) {
+      if (a >= 1000000) return (v / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (a >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return String(Math.round(v));
+    }
     if (a >= 1000000) return (v / 1000000).toFixed(2) + 'M';
     if (a >= 1000) return (v / 1000).toFixed(2) + 'k';
     if (a >= 1) return v.toFixed(2);
     if (a >= 0.01) return v.toFixed(3);
     if (a === 0) return '0';
     return v.toExponential(1);
+  }
+
+  function fmtUnit(units) {
+    if (!units) return '';
+    // Tight spacing for "%", normal for word units like "B", "Mbps".
+    return units === '%' ? units : ' ' + units;
   }
 
   function niceTicks(min, max, count) {
@@ -206,7 +217,16 @@
       ctx.beginPath();
       ctx.moveTo(plotL, y); ctx.lineTo(plotR, y);
       ctx.stroke();
-      ctx.fillText(fmtValue(v), plotL - 6, y);
+      ctx.fillText(fmtValue(v, data.is_integer), plotL - 6, y);
+    }
+
+    if (data.units) {
+      ctx.fillStyle = '#888';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.font = '10px Roboto, Helvetica, Arial, sans-serif';
+      ctx.fillText(data.units, plotL + 4, plotT - 1);
+      ctx.font = '11px Roboto, Helvetica, Arial, sans-serif';
     }
 
     // X axis ticks
@@ -332,7 +352,7 @@
       '<div class="row">'
       + '<span class="sw" style="background:' + r.color + '"></span>'
       + '<span class="nm">' + escapeHtml(r.name) + '</span>'
-      + '<span class="vl">' + fmtValue(r.value) + (r.units ? ' ' + escapeHtml(r.units) : '') + '</span>'
+      + '<span class="vl">' + fmtValue(r.value, state.data && state.data.is_integer) + (r.units ? ' ' + escapeHtml(r.units) : '') + '</span>'
       + '</div>'
     ).join('');
     tip.innerHTML = header + body;

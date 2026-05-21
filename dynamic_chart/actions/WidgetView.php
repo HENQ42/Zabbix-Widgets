@@ -59,6 +59,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$y_min = null;
 		$y_max = null;
 		$error = null;
+		$item_units = '';
+		$all_integer = false;
 
 		if (!$hostids || $item_key === '') {
 			$error = _('Select at least one host and one item key.');
@@ -88,6 +90,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			else {
 				$by_value_type = [];
 				$item_by_id = [];
+				$all_integer = true;
+				$has_any = false;
 				foreach ($items as $it) {
 					$vt = (int) $it['value_type'];
 					if (!in_array($vt, [0, 3], true)) {
@@ -95,6 +99,16 @@ class WidgetView extends CControllerDashboardWidgetView {
 					}
 					$by_value_type[$vt][] = $it['itemid'];
 					$item_by_id[$it['itemid']] = $it;
+					if ($item_units === '' && !empty($it['units'])) {
+						$item_units = $it['units'];
+					}
+					if ($vt !== 3) {
+						$all_integer = false;
+					}
+					$has_any = true;
+				}
+				if (!$has_any) {
+					$all_integer = false;
 				}
 
 				$use_trends = ($time_to - $time_from) > 86400;
@@ -219,6 +233,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'time_to' => $time_to,
 				'y_min' => $y_min,
 				'y_max' => $y_max,
+				'units' => $item_units,
+				'is_integer' => $all_integer,
 				'line_thickness' => $line_thickness,
 				'fill_intensity' => $fill_intensity,
 				'non_business' => $non_business,
