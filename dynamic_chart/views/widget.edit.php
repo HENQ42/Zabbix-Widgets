@@ -39,7 +39,7 @@
 		(new CWidgetFieldCheckBoxListView($data['fields']['business_days']))->setColumns(7)
 	)
 	->addField(
-		new CWidgetFieldCheckBoxView($data['fields']['show_extremes'])
+		new CWidgetFieldIntegerBoxView($data['fields']['bottom_count'])
 	)
 	->addField($data['templateid'] === null
 		? new CWidgetFieldMultiSelectOverrideHostView($data['fields']['override_hostid'])

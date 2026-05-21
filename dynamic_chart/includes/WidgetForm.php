@@ -6,6 +6,7 @@ use Zabbix\Widgets\{CWidgetField, CWidgetForm};
 use Zabbix\Widgets\Fields\{
 	CWidgetFieldCheckBox,
 	CWidgetFieldCheckBoxList,
+	CWidgetFieldIntegerBox,
 	CWidgetFieldMultiSelectHost,
 	CWidgetFieldMultiSelectItem,
 	CWidgetFieldMultiSelectOverrideHost,
@@ -74,8 +75,8 @@ class WidgetForm extends CWidgetForm {
 				]))->setDefault([1, 2, 3, 4, 5])
 			)
 			->addField(
-				(new CWidgetFieldCheckBox('show_extremes',
-					_('Show only top-average and bottom-average hosts')))
+				(new CWidgetFieldIntegerBox('bottom_count',
+					_('Bottom-average hosts to include (top is always shown)'), 0, 10))
 					->setDefault(0)
 			);
 	}

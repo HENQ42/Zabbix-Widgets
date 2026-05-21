@@ -53,7 +53,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$business_end = self::parseHHMM((string) ($this->fields_values['business_end'] ?? '18:00'));
 		$business_days = array_map('intval', (array) ($this->fields_values['business_days'] ?? [1, 2, 3, 4, 5]));
 
-		$show_extremes = (int) ($this->fields_values['show_extremes'] ?? 0) === 1;
+		$bottom_count = max(0, min(10, (int) ($this->fields_values['bottom_count'] ?? 0)));
 
 		$series = [];
 		$y_min = null;
@@ -162,22 +162,34 @@ class WidgetView extends CControllerDashboardWidgetView {
 				}
 				unset($s);
 
-				if ($show_extremes && count($series_by_host) > 1) {
+				// Always: top-avg host + N lowest-avg hosts (N = bottom_count).
+				if ($series_by_host) {
 					uasort($series_by_host, static fn($a, $b) => $b['avg'] <=> $a['avg']);
 					$keys = array_keys($series_by_host);
 					$top_key = $keys[0];
-					$bot_key = $keys[count($keys) - 1];
-					$series_by_host = [
-						$top_key => $series_by_host[$top_key] + ['role' => 'top'],
-						$bot_key => $series_by_host[$bot_key] + ['role' => 'bottom']
-					];
+
+					$picked = [$top_key => $series_by_host[$top_key] + ['role' => 'top']];
+
+					if ($bottom_count > 0 && count($keys) > 1) {
+						$bottoms = array_slice($keys, -$bottom_count, $bottom_count);
+						$bottoms = array_reverse($bottoms); // lowest first
+						$bottoms = array_diff($bottoms, [$top_key]);
+						foreach ($bottoms as $bk) {
+							$picked[$bk] = $series_by_host[$bk] + ['role' => 'bottom'];
+						}
+					}
+
+					$series_by_host = $picked;
 				}
 
+				$show_role = $bottom_count > 0;
 				$i = 0;
 				foreach ($series_by_host as $s) {
+					$suffix = $show_role
+						? ($s['role'] === 'top' ? ' (top avg)' : ' (bottom avg)')
+						: '';
 					$series[] = [
-						'name' => $s['host_name']
-							. (isset($s['role']) ? ($s['role'] === 'top' ? ' (top avg)' : ' (bottom avg)') : ''),
+						'name' => $s['host_name'].$suffix,
 						'color' => self::PALETTE[$i % count(self::PALETTE)],
 						'units' => $s['units'],
 						'avg' => round($s['avg'], 4),
