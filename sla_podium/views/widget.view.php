@@ -133,10 +133,10 @@ $css = <<<CSS
 
 	height: 100%;
 	box-sizing: border-box;
-	padding: 8px;
+	padding: 0;
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: var(--bg-page);
+	background: #fff;
 	overflow: hidden;
 }
 .slap-wrap[data-theme="dark"] {
@@ -178,10 +178,10 @@ $css = <<<CSS
 .widget {
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: var(--r-lg);
-	box-shadow: var(--shadow-sm);
+	background: #fff;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 	overflow: hidden;
 	font-size: 14px;
 	line-height: 1.45;
