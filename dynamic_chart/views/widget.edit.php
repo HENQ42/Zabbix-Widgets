@@ -41,4 +41,8 @@
 	->addField(
 		new CWidgetFieldCheckBoxView($data['fields']['show_extremes'])
 	)
+	->addField($data['templateid'] === null
+		? new CWidgetFieldMultiSelectOverrideHostView($data['fields']['override_hostid'])
+		: null
+	)
 	->show();

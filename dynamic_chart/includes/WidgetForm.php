@@ -8,6 +8,7 @@ use Zabbix\Widgets\Fields\{
 	CWidgetFieldCheckBoxList,
 	CWidgetFieldMultiSelectHost,
 	CWidgetFieldMultiSelectItem,
+	CWidgetFieldMultiSelectOverrideHost,
 	CWidgetFieldRangeControl,
 	CWidgetFieldTextBox
 };
@@ -17,8 +18,10 @@ class WidgetForm extends CWidgetForm {
 	public function addFields(): self {
 		return $this
 			->addField(
-				(new CWidgetFieldMultiSelectHost('hostids', _('Hosts')))
-					->setFlags(CWidgetField::FLAG_NOT_EMPTY | CWidgetField::FLAG_LABEL_ASTERISK)
+				new CWidgetFieldMultiSelectHost('hostids', _('Hosts'))
+			)
+			->addField(
+				new CWidgetFieldMultiSelectOverrideHost()
 			)
 			->addField(
 				(new CWidgetFieldMultiSelectItem('itemid', _('Item')))

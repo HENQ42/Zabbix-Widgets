@@ -19,7 +19,13 @@ class WidgetView extends CControllerDashboardWidgetView {
 	protected function doAction(): void {
 		$name = $this->getInput('name', $this->widget->getName());
 
-		$hostids = $this->fields_values['hostids'] ?? [];
+		$override_hostid = $this->fields_values['override_hostid'] ?? [];
+		if ($override_hostid) {
+			$hostids = is_array($override_hostid) ? $override_hostid : [$override_hostid];
+		}
+		else {
+			$hostids = $this->fields_values['hostids'] ?? [];
+		}
 		$picked_itemids = (array) ($this->fields_values['itemid'] ?? []);
 		$item_key = '';
 		if ($picked_itemids) {
@@ -61,15 +67,20 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$hosts = API::Host()->get([
 				'output' => ['hostid', 'name'],
 				'hostids' => $hostids,
+				'filter' => ['status' => HOST_STATUS_MONITORED],
 				'preservekeys' => true
 			]);
 
-			$items = API::Item()->get([
-				'output' => ['itemid', 'hostid', 'name', 'value_type', 'units'],
-				'hostids' => $hostids,
-				'filter' => ['key_' => $item_key],
-				'webitems' => true
-			]);
+			$active_hostids = array_keys($hosts);
+
+			$items = $active_hostids
+				? API::Item()->get([
+					'output' => ['itemid', 'hostid', 'name', 'value_type', 'units'],
+					'hostids' => $active_hostids,
+					'filter' => ['key_' => $item_key, 'status' => ITEM_STATUS_ACTIVE],
+					'webitems' => true
+				])
+				: [];
 
 			if (!$items) {
 				$error = _('No matching item found on selected hosts.');
