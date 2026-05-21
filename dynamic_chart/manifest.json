@@ -1,0 +1,20 @@
+{
+    "manifest_version": 2.0,
+    "id": "dynamic_chart",
+    "type": "widget",
+    "name": "Dynamic Chart",
+    "namespace": "DynamicChart",
+    "version": "1.0",
+    "description": "Grafico de linha multi-host com espessura/preenchimento configuravel, overlay de horario comercial e filtro top/bottom media.",
+    "author": "Custom",
+    "actions": {
+        "widget.dynamic_chart.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Dynamic Chart",
+        "size": { "width": 24, "height": 8 }
+    }
+}
