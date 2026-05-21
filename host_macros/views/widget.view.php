@@ -180,6 +180,67 @@ $css = <<<CSS
 		padding: 6px 16px 10px;
 	}
 
+	/* --- Group mode search bar --- */
+	.hmacro-toolbar {
+		display: flex;
+		justify-content: flex-start;
+		align-items: center;
+		gap: 6px;
+		margin-bottom: 8px;
+		min-height: 24px;
+	}
+	.hmacro-search-toggle {
+		display: inline-block;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 0 !important;
+		outline: none !important;
+		box-shadow: none !important;
+		background-color: transparent !important;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586069' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: center;
+		background-size: 16px;
+		cursor: pointer;
+		opacity: 0.55;
+		transition: opacity 0.15s ease;
+	}
+	.hmacro-search-toggle:hover { opacity: 1; }
+	.hmacro-search-toggle:focus,
+	.hmacro-search-toggle:active,
+	.hmacro-search-toggle:focus-visible {
+		outline: none !important;
+		box-shadow: none !important;
+		border: 0 !important;
+	}
+	.hmacro-search-input {
+		width: 0;
+		padding: 4px 0;
+		font-size: 12px;
+		border: 1px solid transparent;
+		border-radius: 4px;
+		background: transparent;
+		color: var(--hmacro-text);
+		opacity: 0;
+		pointer-events: none;
+		transition: width 0.2s ease, padding 0.2s ease, opacity 0.15s ease, border-color 0.15s ease;
+		box-sizing: border-box;
+	}
+	.hmacro-toolbar.is-open .hmacro-search-input {
+		width: 180px;
+		padding: 4px 8px;
+		opacity: 1;
+		pointer-events: auto;
+		border-color: var(--hmacro-border);
+		background: var(--hmacro-card-bg);
+	}
+	.hmacro-search-input:focus {
+		outline: none;
+		border-color: #1976D2;
+	}
+	.hmacro-host-hidden { display: none !important; }
+
 	/* --- Group mode --- */
 	.hmacro-grid {
 		display: grid;
@@ -320,12 +381,28 @@ elseif ($view_mode === 1) {
 
 	$wrap = (new CDiv())->addClass('hmacro-wrap');
 
+	$toolbar = (new CDiv())->addClass('hmacro-toolbar is-open')->addItem([
+		(new CTag('span', true, ''))
+			->addClass('hmacro-search-toggle')
+			->setAttribute('role', 'button')
+			->setAttribute('tabindex', '0')
+			->setAttribute('aria-label', _('Search hosts'))
+			->setAttribute('title', _('Search hosts')),
+		(new CTag('input', false))
+			->setAttribute('type', 'text')
+			->setAttribute('placeholder', _('Filter hosts…'))
+			->addClass('hmacro-search-input')
+	]);
+	$wrap->addItem($toolbar);
+
 	$grid = (new CDiv())
 		->addClass('hmacro-grid')
 		->addStyle('grid-template-columns: repeat('.$columns.', minmax(0, 1fr));');
 
 	foreach ($data['hosts'] as $host_entry) {
-		$card = (new CDiv())->addClass('hmacro-single');
+		$card = (new CDiv())
+			->addClass('hmacro-single')
+			->setAttribute('data-host-name', mb_strtolower((string) $host_entry['name']));
 
 		// Header with host name.
 		$card_header = (new CDiv($host_entry['name']))
@@ -380,6 +457,20 @@ elseif ($view_mode === 2) {
 
 	$wrap = (new CDiv())->addClass('hmacro-wrap');
 
+	$toolbar = (new CDiv())->addClass('hmacro-toolbar is-open')->addItem([
+		(new CTag('span', true, ''))
+			->addClass('hmacro-search-toggle')
+			->setAttribute('role', 'button')
+			->setAttribute('tabindex', '0')
+			->setAttribute('aria-label', _('Search hosts'))
+			->setAttribute('title', _('Search hosts')),
+		(new CTag('input', false))
+			->setAttribute('type', 'text')
+			->setAttribute('placeholder', _('Filter hosts…'))
+			->addClass('hmacro-search-input')
+	]);
+	$wrap->addItem($toolbar);
+
 	$grid = (new CDiv())
 		->addClass('hmacro-grid')
 		->addStyle('grid-template-columns: repeat('.$columns.', minmax(0, 1fr));');
@@ -389,7 +480,9 @@ elseif ($view_mode === 2) {
 			continue;
 		}
 
-		$card = (new CDiv())->addClass('hmacro-single');
+		$card = (new CDiv())
+			->addClass('hmacro-single')
+			->setAttribute('data-host-name', mb_strtolower((string) $host_entry['name']));
 
 		// Header with host name.
 		$header = (new CDiv($host_entry['name']))
