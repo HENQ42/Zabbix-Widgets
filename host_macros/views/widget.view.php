@@ -15,6 +15,20 @@ $columns = (int) ($data['columns'] ?? 4);
 
 // Returns an array: [value-span] or [value-span, eye-button] when toggleable.
 $render_value = function ($value, $real_value, $toggleable, $value_class) {
+	$is_url = !$toggleable && is_string($value)
+		&& preg_match('#^https?://\S+#i', (string) $value) === 1;
+
+	if ($is_url) {
+		$link = (new CTag('a', true, $value))
+			->setAttribute('href', $value)
+			->setAttribute('target', '_blank')
+			->setAttribute('rel', 'noopener noreferrer')
+			->addClass($value_class)
+			->addClass('hmacro-value-link');
+
+		return [$link];
+	}
+
 	$span = (new CSpan($value))->addClass($value_class);
 
 	if (!$toggleable) {
@@ -149,6 +163,14 @@ $css = <<<CSS
 	}
 	.hmacro-macro-value {
 		font-weight: 700;
+	}
+	.hmacro-value-link {
+		color: #1976D2;
+		text-decoration: underline;
+		word-break: break-all;
+	}
+	.hmacro-value-link:hover {
+		text-decoration: none;
 	}
 	.hmacro-macro-desc {
 		font-size: 11px;
