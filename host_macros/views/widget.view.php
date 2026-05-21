@@ -89,7 +89,32 @@ $css = <<<CSS
 		font-weight: 700;
 		color: #ffffff;
 		letter-spacing: 0.3px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
 	}
+	.hmacro-host-name-text {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+	.hmacro-host-link {
+		display: inline-block;
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: center;
+		background-size: 14px;
+		opacity: 0.75;
+		transition: opacity 0.15s ease;
+		text-decoration: none !important;
+	}
+	.hmacro-host-link:hover { opacity: 1; }
 	.hmacro-row {
 		display: flex;
 		align-items: baseline;
@@ -303,8 +328,22 @@ if ($view_mode === 0) {
 	$wrap = (new CDiv())->addClass('hmacro-wrap');
 	$card = (new CDiv())->addClass('hmacro-single');
 
-	// Header with host name.
-	$header = (new CDiv($data['host']['name']))
+	// Header with host name + link to host dashboard.
+	$host_url = (new CUrl('zabbix.php'))
+		->setArgument('action', 'host.dashboard.view')
+		->setArgument('hostid', $data['host']['hostid'])
+		->getUrl();
+
+	$header = (new CDiv([
+		(new CSpan($data['host']['name']))->addClass('hmacro-host-name-text'),
+		(new CTag('a', true, ''))
+			->setAttribute('href', $host_url)
+			->setAttribute('target', '_blank')
+			->setAttribute('rel', 'noopener')
+			->setAttribute('title', _('Open host dashboard'))
+			->setAttribute('aria-label', _('Open host dashboard'))
+			->addClass('hmacro-host-link')
+	]))
 		->addClass('hmacro-host-header')
 		->addStyle('background-color: #'.$header_color.';');
 
@@ -404,8 +443,22 @@ elseif ($view_mode === 1) {
 			->addClass('hmacro-single')
 			->setAttribute('data-host-name', mb_strtolower((string) $host_entry['name']));
 
-		// Header with host name.
-		$card_header = (new CDiv($host_entry['name']))
+		// Header with host name + link to host dashboard.
+		$host_url = (new CUrl('zabbix.php'))
+			->setArgument('action', 'host.dashboard.view')
+			->setArgument('hostid', $host_entry['hostid'])
+			->getUrl();
+
+		$card_header = (new CDiv([
+			(new CSpan($host_entry['name']))->addClass('hmacro-host-name-text'),
+			(new CTag('a', true, ''))
+				->setAttribute('href', $host_url)
+				->setAttribute('target', '_blank')
+				->setAttribute('rel', 'noopener')
+				->setAttribute('title', _('Open host dashboard'))
+				->setAttribute('aria-label', _('Open host dashboard'))
+				->addClass('hmacro-host-link')
+		]))
 			->addClass('hmacro-host-header')
 			->addStyle('background-color: #'.$header_color.';');
 
@@ -484,8 +537,22 @@ elseif ($view_mode === 2) {
 			->addClass('hmacro-single')
 			->setAttribute('data-host-name', mb_strtolower((string) $host_entry['name']));
 
-		// Header with host name.
-		$header = (new CDiv($host_entry['name']))
+		// Header with host name + link to host dashboard.
+		$host_url = (new CUrl('zabbix.php'))
+			->setArgument('action', 'host.dashboard.view')
+			->setArgument('hostid', $host_entry['hostid'])
+			->getUrl();
+
+		$header = (new CDiv([
+			(new CSpan($host_entry['name']))->addClass('hmacro-host-name-text'),
+			(new CTag('a', true, ''))
+				->setAttribute('href', $host_url)
+				->setAttribute('target', '_blank')
+				->setAttribute('rel', 'noopener')
+				->setAttribute('title', _('Open host dashboard'))
+				->setAttribute('aria-label', _('Open host dashboard'))
+				->addClass('hmacro-host-link')
+		]))
 			->addClass('hmacro-host-header')
 			->addStyle('background-color: #'.$header_color.';');
 
