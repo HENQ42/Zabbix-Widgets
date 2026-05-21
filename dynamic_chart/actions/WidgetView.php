@@ -111,19 +111,30 @@ class WidgetView extends CControllerDashboardWidgetView {
 					$all_integer = false;
 				}
 
-				$use_trends = ($time_to - $time_from) > 86400;
+				$span = $time_to - $time_from;
+				$use_trends = $span > 86400;
+				$target_buckets = 300;
+				$bucket_seconds = max(1, (int) ceil($span / $target_buckets));
+				if ($use_trends) {
+					$bucket_seconds = max(3600, $bucket_seconds);
+				}
 				$points_by_item = [];
 
 				foreach ($by_value_type as $vt => $ids) {
 					if ($use_trends) {
 						$rows = API::Trend()->get([
-							'output' => ['itemid', 'clock', 'value_avg'],
+							'output' => ['itemid', 'clock', 'value_min', 'value_avg', 'value_max'],
 							'itemids' => $ids,
 							'time_from' => $time_from,
 							'time_till' => $time_to
 						]) ?: [];
 						foreach ($rows as $r) {
-							$points_by_item[$r['itemid']][] = [(int) $r['clock'], (float) $r['value_avg']];
+							$points_by_item[$r['itemid']][] = [
+								(int) $r['clock'],
+								(float) $r['value_avg'],
+								(float) $r['value_min'],
+								(float) $r['value_max']
+							];
 						}
 					}
 					else {
@@ -137,7 +148,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 							'sortorder' => 'ASC'
 						]) ?: [];
 						foreach ($rows as $r) {
-							$points_by_item[$r['itemid']][] = [(int) $r['clock'], (float) $r['value']];
+							$v = (float) $r['value'];
+							$points_by_item[$r['itemid']][] = [(int) $r['clock'], $v, $v, $v];
 						}
 					}
 				}
@@ -164,13 +176,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 				foreach ($series_by_host as &$s) {
 					usort($s['points'], static fn($a, $b) => $a[0] <=> $b[0]);
+					$s['points'] = self::bucketize($s['points'], $bucket_seconds);
 					$sum = 0.0;
 					$n = 0;
 					foreach ($s['points'] as $p) {
 						$sum += $p[1];
 						$n++;
-						if ($y_min === null || $p[1] < $y_min) $y_min = $p[1];
-						if ($y_max === null || $p[1] > $y_max) $y_max = $p[1];
+						if ($y_min === null || $p[2] < $y_min) $y_min = $p[2];
+						if ($y_max === null || $p[3] > $y_max) $y_max = $p[3];
 					}
 					$s['avg'] = $n > 0 ? $sum / $n : 0.0;
 				}
@@ -242,6 +255,37 @@ class WidgetView extends CControllerDashboardWidgetView {
 			],
 			'user' => ['debug_mode' => $this->getDebugMode()]
 		]));
+	}
+
+	private static function bucketize(array $pts, int $bucket): array {
+		if (!$pts || $bucket <= 1) {
+			return $pts;
+		}
+		$buckets = [];
+		foreach ($pts as $p) {
+			$key = intdiv($p[0], $bucket);
+			if (!isset($buckets[$key])) {
+				$buckets[$key] = ['avg_sum' => 0.0, 'n' => 0, 'min' => $p[2], 'max' => $p[3], 'tsum' => 0];
+			}
+			$b = &$buckets[$key];
+			$b['avg_sum'] += $p[1];
+			$b['tsum'] += $p[0];
+			$b['n']++;
+			if ($p[2] < $b['min']) $b['min'] = $p[2];
+			if ($p[3] > $b['max']) $b['max'] = $p[3];
+			unset($b);
+		}
+		ksort($buckets);
+		$out = [];
+		foreach ($buckets as $b) {
+			$out[] = [
+				(int) round($b['tsum'] / $b['n']),
+				$b['avg_sum'] / $b['n'],
+				$b['min'],
+				$b['max']
+			];
+		}
+		return $out;
 	}
 
 	private static function parseRelative(string $s, int $fallback, bool $is_start): int {

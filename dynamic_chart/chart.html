@@ -251,9 +251,12 @@
     const stroke = (data.line_thickness || 0) * 0.6;
     const fillA = (data.fill_intensity || 0) * 0.07;
 
+    const bandA = Math.min(0.4, 0.15 + (data.fill_intensity || 0) * 0.025);
+
     for (const s of data.series) {
       if (!s.points.length) continue;
       const rgb = hexToRgb(s.color);
+      const hasBand = s.points[0].length >= 4;
 
       if (fillA > 0) {
         ctx.beginPath();
@@ -263,6 +266,26 @@
         ctx.closePath();
         ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillA + ')';
         ctx.fill();
+      }
+
+      if (hasBand) {
+        let anyRange = false;
+        for (const p of s.points) {
+          if (p[3] > p[2]) { anyRange = true; break; }
+        }
+        if (anyRange) {
+          ctx.beginPath();
+          ctx.moveTo(xScale(s.points[0][0]), yScale(s.points[0][3]));
+          for (let i = 1; i < s.points.length; i++) {
+            ctx.lineTo(xScale(s.points[i][0]), yScale(s.points[i][3]));
+          }
+          for (let i = s.points.length - 1; i >= 0; i--) {
+            ctx.lineTo(xScale(s.points[i][0]), yScale(s.points[i][2]));
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + bandA + ')';
+          ctx.fill();
+        }
       }
 
       if (stroke > 0) {
@@ -336,6 +359,8 @@
         color: s.color,
         name: s.name,
         value: p[1],
+        vmin: p.length >= 4 ? p[2] : null,
+        vmax: p.length >= 4 ? p[3] : null,
         units: s.units || '',
         ts: p[0]
       });
@@ -348,13 +373,19 @@
     const tip = document.getElementById('tip');
     if (!rows.length) { tip.style.display = 'none'; return; }
     const header = '<div class="t">' + fmtFull(tMouse) + '</div>';
-    const body = rows.map(r =>
-      '<div class="row">'
-      + '<span class="sw" style="background:' + r.color + '"></span>'
-      + '<span class="nm">' + escapeHtml(r.name) + '</span>'
-      + '<span class="vl">' + fmtValue(r.value, state.data && state.data.is_integer) + (r.units ? ' ' + escapeHtml(r.units) : '') + '</span>'
-      + '</div>'
-    ).join('');
+    const isInt = state.data && state.data.is_integer;
+    const body = rows.map(r => {
+      const unit = r.units ? ' ' + escapeHtml(r.units) : '';
+      let val = fmtValue(r.value, isInt) + unit;
+      if (r.vmin !== null && r.vmax !== null && r.vmax > r.vmin) {
+        val += ' <span style="color:#888">(' + fmtValue(r.vmin, isInt) + '–' + fmtValue(r.vmax, isInt) + ')</span>';
+      }
+      return '<div class="row">'
+        + '<span class="sw" style="background:' + r.color + '"></span>'
+        + '<span class="nm">' + escapeHtml(r.name) + '</span>'
+        + '<span class="vl">' + val + '</span>'
+        + '</div>';
+    }).join('');
     tip.innerHTML = header + body;
     tip.style.display = 'block';
 
