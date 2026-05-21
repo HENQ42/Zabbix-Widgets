@@ -8,6 +8,7 @@ use Zabbix\Widgets\Fields\{
 	CWidgetFieldIntegerBox,
 	CWidgetFieldMultiSelectGroup,
 	CWidgetFieldMultiSelectHost,
+	CWidgetFieldMultiSelectOverrideHost,
 	CWidgetFieldSelect,
 	CWidgetFieldTextBox
 };
@@ -43,6 +44,9 @@ class WidgetForm extends CWidgetForm {
 			->addField(
 				(new CWidgetFieldColor('header_color', _('Header color')))
 					->setDefault('1976D2')
+			)
+			->addField(
+				new CWidgetFieldMultiSelectOverrideHost()
 			);
 	}
 }

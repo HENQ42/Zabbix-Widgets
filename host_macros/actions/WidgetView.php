@@ -14,6 +14,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$view_mode = (int) ($this->fields_values['view_mode'] ?? 0);
 		$groupids = $this->fields_values['groupids'] ?? [];
 		$direct_hostids = $this->fields_values['hostids'] ?? [];
+		$override_hostid = $this->fields_values['override_hostid'] ?? [];
+
+		// Dashboard host selector (broadcaster) — takes precedence in Single host mode.
+		// In Group mode, the broadcaster narrows the result to that single host as well.
+		if ($override_hostid) {
+			$direct_hostids = is_array($override_hostid) ? $override_hostid : [$override_hostid];
+			$groupids = [];
+		}
 		$macro_filter = trim((string) ($this->fields_values['macro_filter'] ?? ''));
 		$hidden_macros_raw = trim((string) ($this->fields_values['hidden_macros'] ?? ''));
 		$columns = (int) ($this->fields_values['columns'] ?? 4);
