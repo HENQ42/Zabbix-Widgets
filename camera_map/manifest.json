@@ -1,0 +1,20 @@
+{
+    "manifest_version": 2.0,
+    "id": "camera_map",
+    "type": "widget",
+    "name": "Camera Map",
+    "namespace": "CameraMap",
+    "version": "1.0",
+    "description": "Mapa das cameras posicionadas via itens de latitude/longitude. Pinos coloridos por severidade do problema ativo, com popup contendo dados do host e link.",
+    "author": "Custom",
+    "actions": {
+        "widget.camera_map.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Camera Map",
+        "size": { "width": 18, "height": 7 }
+    }
+}

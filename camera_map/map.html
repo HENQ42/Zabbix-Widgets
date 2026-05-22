@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+    font-family: Roboto, Helvetica, Arial, sans-serif; color: #333; }
+  #map { width: 100%; height: 100%; background: #f4f4f4; }
+  .pin {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    color: #fff; font-weight: 700; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: Roboto, Helvetica, Arial, sans-serif;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+  }
+  .pin-label {
+    background: rgba(255,255,255,0.92); padding: 1px 4px; border-radius: 3px;
+    font-size: 11px; font-weight: 500; border: 1px solid #ccc;
+    white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    position: absolute; left: 30px; top: 4px;
+  }
+  .centroid {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #222; color: #fff; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    font-family: Roboto, Helvetica, Arial, sans-serif;
+  }
+  .leaflet-popup-content { margin: 8px 10px; font-size: 12px; min-width: 160px; }
+  .leaflet-popup-content h4 { margin: 0 0 6px; font-size: 13px; }
+  .leaflet-popup-content .coords { color: #777; font-size: 11px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+  .leaflet-popup-content .status { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    color: #fff; font-weight: 600; font-size: 11px; margin-bottom: 6px; }
+  .leaflet-popup-content ul { margin: 4px 0 6px; padding-left: 16px; }
+  .leaflet-popup-content li { margin: 1px 0; }
+  .leaflet-popup-content a { color: #1F77B4; text-decoration: none; }
+  .leaflet-popup-content a:hover { text-decoration: underline; }
+  .home-btn {
+    background: #fff; width: 30px; height: 30px; line-height: 28px;
+    text-align: center; cursor: pointer; font-size: 16px; color: #333;
+    border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); user-select: none;
+  }
+  .home-btn:hover { background: #f0f0f0; }
+  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #888; font-size: 13px; background: rgba(255,255,255,0.85); padding: 8px 14px;
+    border-radius: 4px; z-index: 1000; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="msg" style="display:none"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  const data = (() => {
+    try { return JSON.parse(decodeURIComponent(window.location.hash.substring(1))); }
+    catch (e) { return null; }
+  })();
+
+  const msg = document.getElementById('msg');
+  function showMessage(text) { msg.textContent = text; msg.style.display = 'block'; }
+
+  if (!data) { showMessage('Sem dados.'); return; }
+  if (data.error) { showMessage(data.error); }
+
+  const markers = data.markers || [];
+
+  let initialCenter = data.center;
+  if (!initialCenter && markers.length) initialCenter = [markers[0].lat, markers[0].lon];
+  if (!initialCenter) initialCenter = [0, 0];
+
+  const map = L.map('map', { zoomControl: true, attributionControl: true })
+    .setView(initialCenter, data.zoom || 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function severityBadge(m) {
+    if (m.severity < 0) return '<span class="status" style="background:#59DB8F">OK</span>';
+    return '<span class="status" style="background:' + m.color + '">' + escapeHtml(m.severity_name) + '</span>';
+  }
+
+  function makeIcon(m) {
+    const label = m.label || '';
+    const fontSize = label.length >= 3 ? 9 : 11;
+    const pinHtml =
+      '<div class="pin" style="background:' + m.color + ';font-size:' + fontSize + 'px">' +
+      escapeHtml(label) + '</div>' +
+      (data.show_labels
+        ? '<div class="pin-label">' + escapeHtml(m.name) + '</div>'
+        : '');
+    return L.divIcon({
+      className: '',
+      html: pinHtml,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      popupAnchor: [0, -13]
+    });
+  }
+
+  function makePopupHtml(m) {
+    let problemsHtml = '';
+    if (m.problems && m.problems.length) {
+      problemsHtml = '<ul>' + m.problems.map(p =>
+        '<li>' + escapeHtml(p.name) + '</li>').join('') + '</ul>';
+      if (m.problem_count > m.problems.length) {
+        problemsHtml += '<div style="color:#777;font-size:11px">+' +
+          (m.problem_count - m.problems.length) + ' more</div>';
+      }
+    }
+    return '<h4>' + escapeHtml(m.name) + '</h4>' +
+      severityBadge(m) +
+      (m.problem_count ? ' <span style="font-size:11px;color:#777">(' + m.problem_count +
+        ' problema' + (m.problem_count > 1 ? 's' : '') + ')</span>' : '') +
+      '<div class="coords">' + m.lat.toFixed(6) + ', ' + m.lon.toFixed(6) + '</div>' +
+      problemsHtml +
+      '<a href="' + m.url + '" target="_top">Abrir dashboard da camera &rarr;</a>';
+  }
+
+  // Build markers at their original positions.
+  const leafletMarkers = [];
+  const origBounds = [];
+  markers.forEach((m, idx) => {
+    const marker = L.marker([m.lat, m.lon], { icon: makeIcon(m), title: m.name });
+    marker.bindPopup(makePopupHtml(m));
+    marker.addTo(map);
+    leafletMarkers[idx] = marker;
+    origBounds.push([m.lat, m.lon]);
+  });
+
+  // Dynamic overlay: lines + centroid badges re-drawn on every zoom.
+  const overlayLayer = L.layerGroup().addTo(map);
+
+  const CLUSTER_METERS    = 20;  // group cameras within this real-world distance
+  const SPREAD_RADIUS_PX  = 36;  // base spread radius (pixels)
+  const SPREAD_TRIGGER_PX = 28;  // if intra-group pixel radius < this → spread + badge
+
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.asin(Math.sqrt(a));
+  }
+
+  // Single-linkage clustering by real distance — computed once, independent of zoom.
+  const clusters = (() => {
+    const assigned = new Array(markers.length).fill(-1);
+    const out = [];
+    for (let i = 0; i < markers.length; i++) {
+      if (assigned[i] !== -1) continue;
+      const cluster = [i];
+      assigned[i] = out.length;
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (let j = 0; j < markers.length; j++) {
+          if (assigned[j] !== -1) continue;
+          for (const k of cluster) {
+            const d = haversineMeters(markers[k].lat, markers[k].lon, markers[j].lat, markers[j].lon);
+            if (d <= CLUSTER_METERS) {
+              cluster.push(j);
+              assigned[j] = out.length;
+              grew = true;
+              break;
+            }
+          }
+        }
+      }
+      out.push(cluster);
+    }
+    return out;
+  })();
+
+  function layoutGroups() {
+    overlayLayer.clearLayers();
+
+    clusters.forEach(group => {
+      if (group.length === 1) {
+        const idx = group[0];
+        leafletMarkers[idx].setLatLng([markers[idx].lat, markers[idx].lon]);
+        return;
+      }
+
+      // Centroid from real coords.
+      let slat = 0, slon = 0;
+      group.forEach(idx => { slat += markers[idx].lat; slon += markers[idx].lon; });
+      const centerLatLng = L.latLng(slat / group.length, slon / group.length);
+      const centerPt = map.latLngToLayerPoint(centerLatLng);
+
+      // Max pixel distance from centroid at current zoom.
+      let maxDistPx = 0;
+      group.forEach(idx => {
+        const p = map.latLngToLayerPoint([markers[idx].lat, markers[idx].lon]);
+        const d = Math.hypot(p.x - centerPt.x, p.y - centerPt.y);
+        if (d > maxDistPx) maxDistPx = d;
+      });
+
+      const needsSpread = maxDistPx < SPREAD_TRIGGER_PX;
+      const n = group.length;
+      const finalLatLngs = [];
+
+      if (needsSpread) {
+        const radius = SPREAD_RADIUS_PX + Math.max(0, n - 4) * 5;
+        group.forEach((idx, i) => {
+          const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+          const pt = L.point(
+            centerPt.x + radius * Math.cos(angle),
+            centerPt.y + radius * Math.sin(angle)
+          );
+          const ll = map.layerPointToLatLng(pt);
+          leafletMarkers[idx].setLatLng(ll);
+          finalLatLngs.push(ll);
+        });
+      } else {
+        group.forEach(idx => {
+          const ll = L.latLng(markers[idx].lat, markers[idx].lon);
+          leafletMarkers[idx].setLatLng(ll);
+          finalLatLngs.push(ll);
+        });
+      }
+
+      // Lines from centroid to each marker (always drawn for a group).
+      finalLatLngs.forEach(ll => {
+        L.polyline([centerLatLng, ll], {
+          color: '#222', weight: 2, opacity: 0.85, interactive: false
+        }).addTo(overlayLayer);
+      });
+
+      // Count badge — only when spread is active (group visually overlapping).
+      if (needsSpread) {
+        const badgeIcon = L.divIcon({
+          className: '',
+          html: '<div class="centroid">' + n + '</div>',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        L.marker(centerLatLng, {
+          icon: badgeIcon, interactive: false, keyboard: false, zIndexOffset: -1000
+        }).addTo(overlayLayer);
+      }
+    });
+  }
+
+  // Initial fit (extra padding for the spread leaves).
+  let homeView = { center: initialCenter, zoom: data.zoom || 13, bounds: null };
+  if (origBounds.length > 1) {
+    const b = L.latLngBounds(origBounds);
+    map.fitBounds(b, { padding: [60, 60], maxZoom: data.zoom || 13 });
+    homeView.bounds = b;
+  }
+  layoutGroups();
+  map.on('zoomend', layoutGroups);
+
+  // Home button.
+  const HomeControl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function () {
+      const el = L.DomUtil.create('div', 'leaflet-bar home-btn');
+      el.innerHTML = '&#8962;';
+      el.title = 'Voltar ao zoom inicial';
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.on(el, 'click', () => {
+        if (homeView.bounds) {
+          map.fitBounds(homeView.bounds, { padding: [60, 60], maxZoom: homeView.zoom });
+        } else {
+          map.setView(homeView.center, homeView.zoom);
+        }
+      });
+      return el;
+    }
+  });
+  map.addControl(new HomeControl());
+
+  if (!markers.length && !data.error) {
+    showMessage('Sem cameras com coordenadas validas.');
+  }
+})();
+</script>
+</body>
+</html>
