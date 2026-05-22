@@ -7,7 +7,9 @@
 $view = new CWidgetView($data);
 
 $payload = json_encode($data['chart'], JSON_UNESCAPED_SLASHES);
-$iframe_url = 'modules/dynamic_chart/chart.html#' . urlencode($payload);
+$asset_path = __DIR__.'/../chart.html';
+$asset_version = file_exists($asset_path) ? filemtime($asset_path) : 0;
+$iframe_url = 'modules/dynamic_chart/chart.html?v='.$asset_version.'#'.urlencode($payload);
 
 $iframe = (new CTag('iframe', true, ''))
 	->setAttribute('src', $iframe_url)
