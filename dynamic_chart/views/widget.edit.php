@@ -27,6 +27,9 @@
 		new CWidgetFieldRangeControlView($data['fields']['fill_intensity'])
 	)
 	->addField(
+		new CWidgetFieldRangeControlView($data['fields']['aggregation_level'])
+	)
+	->addField(
 		new CWidgetFieldCheckBoxView($data['fields']['business_enabled'])
 	)
 	->addField(

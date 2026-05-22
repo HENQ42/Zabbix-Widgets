@@ -50,6 +50,11 @@ class WidgetForm extends CWidgetForm {
 					->setDefault(2)
 			)
 			->addField(
+				(new CWidgetFieldRangeControl('aggregation_level',
+					_('Aggregation level (1=heavy, 10=raw)'), 1, 10, 1))
+					->setDefault(5)
+			)
+			->addField(
 				(new CWidgetFieldCheckBox('business_enabled', _('Highlight business hours')))
 					->setDefault(0)
 			)

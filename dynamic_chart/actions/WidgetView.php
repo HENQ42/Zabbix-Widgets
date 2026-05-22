@@ -113,7 +113,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 				$span = $time_to - $time_from;
 				$use_trends = $span > 86400;
-				$target_buckets = 300;
+				$agg_level = max(1, min(10, (int) ($this->fields_values['aggregation_level'] ?? 5)));
+				$target_buckets = $agg_level * 60;
 				$bucket_seconds = max(1, (int) ceil($span / $target_buckets));
 				if ($use_trends) {
 					$bucket_seconds = max(3600, $bucket_seconds);
