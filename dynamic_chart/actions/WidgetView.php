@@ -182,8 +182,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 					foreach ($s['points'] as $p) {
 						$sum += $p[1];
 						$n++;
-						if ($y_min === null || $p[2] < $y_min) $y_min = $p[2];
-						if ($y_max === null || $p[3] > $y_max) $y_max = $p[3];
+						if ($y_min === null || $p[1] < $y_min) $y_min = $p[1];
+						if ($y_max === null || $p[1] > $y_max) $y_max = $p[1];
 					}
 					$s['avg'] = $n > 0 ? $sum / $n : 0.0;
 				}
