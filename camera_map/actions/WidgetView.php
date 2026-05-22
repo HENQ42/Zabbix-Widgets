@@ -181,7 +181,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 						'severity_name' => $sev_name,
 						'problem_count' => $host_problem_count[$hostid] ?? 0,
 						'problems' => $host_problem_names[$hostid] ?? [],
-						'url' => 'zabbix.php?action=host.dashboard.view&hostid='.$hostid
+						'url' => '../../zabbix.php?action=host.dashboard.view&hostid='.$hostid
 					];
 				}
 

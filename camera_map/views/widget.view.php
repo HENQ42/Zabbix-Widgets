@@ -14,7 +14,7 @@ $iframe_url = 'modules/camera_map/map.html?v='.$asset_version.'#'.urlencode($pay
 $iframe = (new CTag('iframe', true, ''))
 	->setAttribute('src', $iframe_url)
 	->setAttribute('style', 'width: 100%; height: 100%; border: none; display: block;')
-	->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+	->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation');
 
 $view->addItem(
 	(new CDiv($iframe))->addStyle('width:100%;height:100%;position:relative;')
