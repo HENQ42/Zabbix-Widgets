@@ -342,6 +342,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 
 			$output_hosts[] = [
+				'hostid' => (string) $hostid,
 				'name' => $host['name'],
 				'rows' => $host_rows,
 				'state' => $host_state,

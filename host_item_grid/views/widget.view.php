@@ -64,7 +64,8 @@ else {
 			margin-bottom: 6px;
 			border-bottom: 1px solid var(--higrid-header-border);
 		}
-		.higrid-header-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.higrid-header-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: inherit; text-decoration: none; cursor: pointer; }
+		.higrid-header-name:hover { text-decoration: underline; }
 		.higrid-badge {
 			flex-shrink: 0;
 			display: inline-flex;
@@ -141,8 +142,14 @@ else {
 			->addClass('higrid-badge')
 			->addStyle('background-color: #'.$stripe_color.';');
 
+		$host_dashboard_url = 'zabbix.php?action=host.dashboard.view&hostid='.$host['hostid'];
+
+		$header_name = (new CLink($host['name'], $host_dashboard_url))
+			->addClass('higrid-header-name')
+			->setAttribute('title', $host['name']);
+
 		$header = (new CDiv([
-			(new CSpan($host['name']))->addClass('higrid-header-name'),
+			$header_name,
 			$badge
 		]))->addClass('higrid-header');
 
