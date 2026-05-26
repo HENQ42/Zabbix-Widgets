@@ -142,10 +142,10 @@ $css = <<<CSS
 
 	height: 100%;
 	box-sizing: border-box;
-	padding: 8px;
+	padding: 0;
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: var(--bg-page);
+	background: #fff;
 	overflow: hidden;
 }
 .scard-wrap[data-theme="dark"] {
@@ -189,10 +189,10 @@ $css = <<<CSS
 .scard {
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: var(--r-lg);
-	box-shadow: var(--shadow-sm);
+	background: #fff;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 	overflow: hidden;
 	font-size: 14px;
 	line-height: 1.45;
@@ -215,6 +215,8 @@ $css = <<<CSS
 	margin: 0; color: var(--fg);
 	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.scard-title a, .scard-title a:visited { color: inherit; text-decoration: none; cursor: pointer; }
+.scard-title a:hover { text-decoration: underline; }
 .scard-sub { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
 .scard-meta { font-size: 12px; color: var(--fg-muted); text-align: right; flex-shrink: 0; }
 .scard-meta .strong { color: var(--fg); }
@@ -371,8 +373,13 @@ $title_text = $data['host_name'] !== ''
 	? $data['host_name']
 	: ($data['service_name'] ?? '—');
 
+$title_node = (!empty($data['hostid']))
+	? (new CLink($title_text, 'zabbix.php?action=host.dashboard.view&hostid='.$data['hostid']))
+		->setAttribute('title', $title_text)
+	: $title_text;
+
 $head_left = (new CDiv())
-	->addItem((new CTag('h3', true, $title_text))->addClass('scard-title'))
+	->addItem((new CTag('h3', true, $title_node))->addClass('scard-title'))
 	->addItem(
 		(new CDiv('Disponibilidade · '.$data['period_label']))->addClass('scard-sub')
 	);
