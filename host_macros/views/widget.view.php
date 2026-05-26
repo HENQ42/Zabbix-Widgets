@@ -360,8 +360,6 @@ if ($view_mode === 0) {
 		(new CSpan($data['host']['name']))->addClass('hmacro-host-name-text'),
 		(new CTag('a', true, ''))
 			->setAttribute('href', $host_url)
-			->setAttribute('target', '_blank')
-			->setAttribute('rel', 'noopener')
 			->setAttribute('title', _('Open host dashboard'))
 			->setAttribute('aria-label', _('Open host dashboard'))
 			->addClass('hmacro-host-link')
@@ -475,8 +473,6 @@ elseif ($view_mode === 1) {
 			(new CSpan($host_entry['name']))->addClass('hmacro-host-name-text'),
 			(new CTag('a', true, ''))
 				->setAttribute('href', $host_url)
-				->setAttribute('target', '_blank')
-				->setAttribute('rel', 'noopener')
 				->setAttribute('title', _('Open host dashboard'))
 				->setAttribute('aria-label', _('Open host dashboard'))
 				->addClass('hmacro-host-link')
@@ -569,8 +565,6 @@ elseif ($view_mode === 2) {
 			(new CSpan($host_entry['name']))->addClass('hmacro-host-name-text'),
 			(new CTag('a', true, ''))
 				->setAttribute('href', $host_url)
-				->setAttribute('target', '_blank')
-				->setAttribute('rel', 'noopener')
 				->setAttribute('title', _('Open host dashboard'))
 				->setAttribute('aria-label', _('Open host dashboard'))
 				->addClass('hmacro-host-link')
