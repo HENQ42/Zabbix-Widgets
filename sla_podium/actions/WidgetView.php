@@ -147,6 +147,29 @@ class WidgetView extends CControllerDashboardWidgetView {
 			unset($entries[$parent_serviceid]);
 		}
 
+		// Resolve hostid for each entry by matching host.name == service.name.
+		$service_names = array_values(array_unique(array_column($entries, 'name')));
+		$hostid_by_name = [];
+
+		if ($service_names) {
+			$matched_hosts = API::Host()->get([
+				'output' => ['hostid', 'name'],
+				'filter' => ['name' => $service_names],
+				'monitored_hosts' => true
+			]);
+
+			foreach ($matched_hosts as $h) {
+				if (!isset($hostid_by_name[$h['name']])) {
+					$hostid_by_name[$h['name']] = (string) $h['hostid'];
+				}
+			}
+		}
+
+		foreach ($entries as &$entry_ref) {
+			$entry_ref['hostid'] = $hostid_by_name[$entry_ref['name']] ?? '';
+		}
+		unset($entry_ref);
+
 		// Sort ascending by SLI — worst first.
 		uasort($entries, static function (array $a, array $b): int {
 			return $a['sli'] <=> $b['sli'];

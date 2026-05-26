@@ -289,6 +289,10 @@ $css = <<<CSS
 	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 	color: var(--fg);
 }
+.podium-name a, .podium-row .name a,
+.podium-name a:visited, .podium-row .name a:visited { color: inherit; text-decoration: none; cursor: pointer; }
+.podium-name a:hover, .podium-row .name:hover { text-decoration: underline; }
+.podium-row a.name { cursor: pointer; }
 .podium-pct {
 	font-family: var(--font-mono); font-variant-numeric: tabular-nums;
 	font-size: 22px; font-weight: 500;
@@ -459,7 +463,11 @@ for ($i = 0; $i < 3; $i++) {
 		$foot->addItem(new CSpan($fmt_gap((float) $entry['sli'])));
 
 		$card->addItem($head);
-		$card->addItem((new CDiv($entry['name']))->addClass('podium-name'));
+		$name_node = (!empty($entry['hostid']))
+			? (new CLink($entry['name'], 'zabbix.php?action=host.dashboard.view&hostid='.$entry['hostid']))
+				->setAttribute('title', $entry['name'])
+			: new CSpan($entry['name']);
+		$card->addItem((new CDiv($name_node))->addClass('podium-name'));
 		$card->addItem(
 			(new CDiv($fmt_pct((float) $entry['sli'])))
 				->addClass('podium-pct')
@@ -549,7 +557,12 @@ if ($rest) {
 
 		$row = (new CDiv())->addClass('podium-row');
 		$row->addItem((new CSpan((string) $rank))->addClass('rank'));
-		$row->addItem((new CSpan($entry['name']))->addClass('name'));
+		$name_node = (!empty($entry['hostid']))
+			? (new CLink($entry['name'], 'zabbix.php?action=host.dashboard.view&hostid='.$entry['hostid']))
+				->setAttribute('title', $entry['name'])
+				->addClass('name')
+			: (new CSpan($entry['name']))->addClass('name');
+		$row->addItem($name_node);
 		$row->addItem(
 			(new CSpan($fmt_pct((float) $entry['sli'])))
 				->addClass('pct')
