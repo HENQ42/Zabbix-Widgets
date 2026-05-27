@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "host_group_grid",
+    "type": "widget",
+    "name": "Host Group Grid",
+    "namespace": "HostGroupGrid",
+    "version": "1.0",
+    "description": "Exibe uma grade de cards por Site (SEFAZ_AL_NN), agrupando switches e câmeras pela nomenclatura. Cada card mostra badges ativos/total e timeline 24h consolidada.",
+    "author": "Custom",
+    "assets": {
+        "js": ["class.widget.js"]
+    },
+    "actions": {
+        "widget.host_group_grid.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Host Group Grid",
+        "js_class": "CWidgetHostGroupGrid",
+        "size": { "width": 24, "height": 10 }
+    }
+}
