@@ -16,7 +16,7 @@ class WidgetForm extends CWidgetForm {
 	public function addFields(): self {
 		return $this
 			->addField(
-				(new CWidgetFieldMultiSelectGroup('switch_groupids', _('Switch host groups')))
+				(new CWidgetFieldMultiSelectGroup('switch_groupids', _('Edge Router host groups')))
 					->setFlags(CWidgetField::FLAG_NOT_EMPTY | CWidgetField::FLAG_LABEL_ASTERISK)
 			)
 			->addField(
@@ -24,7 +24,7 @@ class WidgetForm extends CWidgetForm {
 					->setFlags(CWidgetField::FLAG_NOT_EMPTY | CWidgetField::FLAG_LABEL_ASTERISK)
 			)
 			->addField(
-				(new CWidgetFieldMultiSelectItem('switch_online_itemid', _('Switch online item')))
+				(new CWidgetFieldMultiSelectItem('switch_online_itemid', _('Edge Router online item')))
 					->setMultiple(false)
 			)
 			->addField(

@@ -5,7 +5,7 @@
     "name": "Host Group Grid",
     "namespace": "HostGroupGrid",
     "version": "1.0",
-    "description": "Exibe uma grade de cards por Site (SEFAZ_AL_NN), agrupando switches e câmeras pela nomenclatura. Cada card mostra badges ativos/total e timeline 24h consolidada.",
+    "description": "Exibe uma grade de cards por Site (PREFIX_NN), agrupando Edge Routers e câmeras pela nomenclatura. Cada card mostra badges ativos/total e timeline 24h consolidada.",
     "author": "Custom",
     "assets": {
         "js": ["class.widget.js"]

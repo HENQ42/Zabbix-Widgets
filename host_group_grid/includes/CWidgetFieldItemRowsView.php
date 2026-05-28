@@ -177,7 +177,7 @@ class CWidgetFieldItemRowsView extends CWidgetFieldView {
 			new CLabel(_('Applies to')),
 			new CDiv(
 				(new CRadioButtonList($prefix.'[target]', $target))
-					->addValue(_('Switch'), CWidgetFieldItemRows::TARGET_SWITCH)
+					->addValue(_('Edge Router'), CWidgetFieldItemRows::TARGET_SWITCH)
 					->addValue(_('Camera'), CWidgetFieldItemRows::TARGET_CAMERA)
 					->setModern()
 			),

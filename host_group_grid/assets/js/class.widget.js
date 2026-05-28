@@ -182,7 +182,7 @@ class CWidgetHostGroupGrid extends CWidget {
             const row1 = tl.slice(0, 12).map(renderCell).join('');
             const row2 = tl.slice(12, 24).map(renderCell).join('');
             const icon = host.type === 'switch' ? '⇄' : '◉';
-            const typeLabel = host.type === 'switch' ? 'Switch' : 'Câmera';
+            const typeLabel = host.type === 'switch' ? 'Edge Router' : 'Câmera';
             const onlineDot = host.online
                 ? '<span class="hggrid-online ok" title="Online"></span>'
                 : '<span class="hggrid-online bad" title="Offline"></span>';
@@ -266,7 +266,7 @@ class CWidgetHostGroupGrid extends CWidget {
             +     '</span>'
             +   '</span>'
             +   '<div style="flex:1;font-size:12px;color:#1f2328;opacity:0.8;">'
-            +     esc(swTotal) + ' ' + (swTotal === 1 ? 'switch' : 'switches')
+            +     esc(swTotal) + ' Edge Router' + (swTotal === 1 ? '' : 's')
             +     ' · ' + esc(camTotal) + ' ' + (camTotal === 1 ? 'câmera' : 'câmeras')
             +   '</div>'
             +   '<span class="hggrid-status ' + site.state + '" '
