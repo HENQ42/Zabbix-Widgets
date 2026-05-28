@@ -25,19 +25,34 @@ else {
 	$color_warning = (isset($data['color_warning']) && $data['color_warning'] !== '') ? $data['color_warning'] : 'D97706';
 
 	$css = <<<CSS
-		.hggrid-wrap {
+		.hggrid-wrap, .hggrid-drilldown {
 			--hggrid-box-bg: #ffffff;
 			--hggrid-box-border: #ccd5db;
 			--hggrid-box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 			--hggrid-text: #1f2328;
 			--hggrid-header-border: #e4e9ec;
+			--hggrid-bar-bg: #ffffff;
+			--hggrid-bar-color: #1f2328;
+			--hggrid-bar-border: rgba(0,0,0,0.12);
+			--hggrid-bar-btn-bg: #ffffff;
+			--hggrid-bar-btn-border: #ccd5db;
+			--hggrid-drilldown-bg: #f4f6f8;
+			--hggrid-accent: #5343d4;
 		}
-		:root[color-scheme="dark"] .hggrid-wrap {
+		:root[color-scheme="dark"] .hggrid-wrap,
+		:root[color-scheme="dark"] .hggrid-drilldown {
 			--hggrid-box-bg: #ededed;
 			--hggrid-box-border: #bfc6cb;
 			--hggrid-box-shadow: 0 1px 2px rgba(0,0,0,0.2);
 			--hggrid-text: #1f2328;
 			--hggrid-header-border: #d4d9dc;
+			--hggrid-bar-bg: #2b3137;
+			--hggrid-bar-color: #e6e6e6;
+			--hggrid-bar-border: rgba(255,255,255,0.12);
+			--hggrid-bar-btn-bg: #3a4046;
+			--hggrid-bar-btn-border: rgba(255,255,255,0.2);
+			--hggrid-drilldown-bg: #1f2328;
+			--hggrid-accent: #a094f0;
 		}
 		.hggrid-wrap { display: grid; gap: 12px; padding: 12px; height: 100%; overflow-y: auto; box-sizing: border-box; align-content: start; }
 		.hggrid-box {
