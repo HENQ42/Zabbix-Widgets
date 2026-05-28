@@ -11,7 +11,7 @@ $view = new CWidgetView($data);
 
 if (empty($data['sites'])) {
 	$view->addItem(
-		(new CTableInfo())->setNoDataMessage(_('No sites detected. Check the configured groups and the host naming pattern (SEFAZ_AL_NN...).'))
+		(new CTableInfo())->setNoDataMessage(_('No sites detected. Check the configured groups and the host naming pattern (PREFIX_NN...).'))
 	);
 }
 else {
@@ -73,9 +73,9 @@ else {
 			white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 			color: inherit;
 			font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-			font-size: 20px;
-			font-weight: 400;
-			letter-spacing: 1px;
+			font-size: 14px;
+			font-weight: 600;
+			letter-spacing: 0.5px;
 			line-height: 1;
 		}
 		.hggrid-status {
@@ -212,13 +212,13 @@ else {
 
 		$switch_badge = (new CSpan([
 			(new CSpan('⇄'))->addClass('hggrid-badge-icon'),
-			' Switch ',
+			' Edge Router ',
 			$site['switch_active'].'/'.$site['switch_total']
 		]))
 			->addClass('hggrid-badge')
 			->addClass($sw_class)
 			->setAttribute('title',
-				_('Switches').': '.$site['switch_active'].' '._('ativos').' / '.$site['switch_total'].' '._('total')
+				_('Edge Routers').': '.$site['switch_active'].' '._('ativos').' / '.$site['switch_total'].' '._('total')
 			);
 
 		$camera_badge = (new CSpan([

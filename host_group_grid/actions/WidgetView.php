@@ -9,7 +9,12 @@ use API,
 
 class WidgetView extends CControllerDashboardWidgetView {
 
-	private const SITE_REGEX = '/^SEFAZ_AL_(?P<site>\d{2})(?:_(?P<tipo>[A-Z0-9]+)(?:_(?P<subtipo>[A-Z0-9]+)_(?P<valor>[A-Z0-9-]+))?)?$/';
+	// Captures the host-name prefix (everything before the site number) and the 2-digit site number.
+	// Non-greedy prefix grabs the FIRST 2-digit block after an underscore, so
+	// `SEFAZ_AL_03_MIKROTIK` -> prefix=`SEFAZ_AL`, site=`03`. The site key returned to callers is
+	// the composite `prefix_site` (e.g. `SEFAZ_AL_03`), so multiple prefixes can coexist without
+	// colliding on the numeric portion alone.
+	private const SITE_REGEX = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
 
 	protected function doAction(): void {
 		$name = $this->getInput('name', $this->widget->getDefaultName());
@@ -532,7 +537,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 			$output_sites[] = [
 				'site_id' => $site_id,
-				'site_label' => 'SEFAZ_AL_'.$site_id,
+				'site_label' => $site_id,
 				'switch_total' => $switch_count,
 				'switch_active' => $switch_active,
 				'camera_total' => $camera_count,
@@ -580,7 +585,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 	private function extractSite(string $host_technical_name): ?string {
 		if (preg_match(self::SITE_REGEX, $host_technical_name, $m)) {
-			return $m['site'];
+			return $m['prefix'].'_'.$m['site'];
 		}
 		return null;
 	}
