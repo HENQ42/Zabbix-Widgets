@@ -238,6 +238,90 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
+		// Event ids already represented by the today-windowed query above, so the active-problems
+		// pass below does not double-count problems that started today.
+		$seen_event_ids = array_flip(array_map('strval', array_column($events, 'eventid')));
+
+		// The today-windowed events query above only returns problems that STARTED today. An incident
+		// that began before 00:00 today and is still open won't be there, so without this pass it
+		// would neither colour today's cells nor be listed in the drill-down. Query the CURRENT set
+		// of unresolved problems directly and feed both the timeline and the "ativo" badge.
+		if ($all_hostids) {
+			// Problem.get does not support selectHosts; the host comes via objectid (the triggerid),
+			// so we resolve triggerid -> hostids with a follow-up Trigger.get. monitored => true keeps
+			// only enabled triggers on monitored hosts with enabled items, which drops problems left
+			// orphaned in the problem table by a since-disabled trigger (they are not real anymore).
+			$active_problems = API::Problem()->get([
+				'output' => ['eventid', 'objectid', 'clock', 'severity', 'name'],
+				'source' => 0,
+				'object' => 0,
+				'hostids' => $all_hostids
+			]);
+
+			if ($active_problems) {
+				$problem_triggerids = array_values(array_unique(array_column($active_problems, 'objectid')));
+				$trigger_hosts = API::Trigger()->get([
+					'output' => ['triggerid'],
+					'selectHosts' => ['hostid'],
+					'triggerids' => $problem_triggerids,
+					'monitored' => true,
+					'preservekeys' => true
+				]);
+
+				foreach ($active_problems as $p) {
+					$eid = (string) $p['eventid'];
+					if (isset($seen_event_ids[$eid])) {
+						continue; // already painted by the today-windowed events query
+					}
+
+					$trigger = $trigger_hosts[$p['objectid']] ?? null;
+					if ($trigger === null) {
+						continue; // trigger disabled, item disabled, or host not monitored
+					}
+
+					$sev = (int) $p['severity'];
+					$start = (int) $p['clock'];
+
+					// This problem started before today (else the events query caught it). Cover today
+					// from 00:00 (bucket 0) up to the current hour.
+					$end_bucket = $current_hour_bucket;
+					if ($end_bucket < 0) {
+						continue;
+					}
+					if ($end_bucket > 23) {
+						$end_bucket = 23;
+					}
+
+					foreach (array_column($trigger['hosts'] ?? [], 'hostid') as $hid) {
+						$hid = (string) $hid;
+
+						$hosts_with_active_problem[$hid] = true;
+						$cur_sev = $host_active_max_sev[$hid] ?? -1;
+						if ($sev > $cur_sev) {
+							$host_active_max_sev[$hid] = $sev;
+						}
+
+						$problem_data = [
+							'eventid' => $eid,
+							'name' => (string) $p['name'],
+							'severity' => $sev,
+							'clock' => $start,
+							'r_clock' => null, // still active
+							'host' => (string) ($camera_hosts[$hid]['name'] ?? $switch_hosts[$hid]['name'] ?? '')
+						];
+
+						for ($b = 0; $b <= $end_bucket; $b++) {
+							$cur = $host_timeline_sev[$hid][$b] ?? -1;
+							if ($sev > $cur) {
+								$host_timeline_sev[$hid][$b] = $sev;
+							}
+							$host_timeline_problems[$hid][$b][] = $problem_data;
+						}
+					}
+				}
+			}
+		}
+
 		// Resolve drill-down item rows (one set, applied per host by key_ matching) — same model as Host Item Grid.
 		$item_rows = $this->fields_values['items'] ?? [];
 

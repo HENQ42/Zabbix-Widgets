@@ -113,7 +113,18 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$window_start = $today_local->getTimestamp();
 		$current_hour_bucket = (int) floor(($now - $window_start) / 3600);
 
-		// Fetch ALL problem events that started today (resolved or not).
+		// Problems feeding the 24h timeline are merged (by eventid) from two sources:
+		//   (1) Events that STARTED today (resolved or still active) — Event.get with time_from.
+		//   (2) Currently-active problems regardless of when they started — Problem.get with no
+		//       time filter. An incident that began before 00:00 today and is still open is NOT
+		//       returned by (1) (time_from filters on the start clock), so without (2) it would
+		//       never colour today's cells and the host would wrongly look stable.
+		// Limitation: a problem that both started before today AND was resolved earlier today is
+		// in neither set, so it is not represented (same trade-off as host_group_grid).
+		// $problem_windows: eventid => ['name','severity','clock','r_clock','hids'=>[hostid,...]]
+		$problem_windows = [];
+
+		// (1) Events that started today (resolved or active).
 		$events = API::Event()->get([
 			'output' => ['eventid', 'objectid', 'clock', 'severity', 'name', 'r_eventid'],
 			'selectHosts' => ['hostid'],
@@ -147,17 +158,72 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
+		foreach ($events as $e) {
+			$r_eventid = (string) ($e['r_eventid'] ?? '0');
+			$r_clock = ($r_eventid !== '' && $r_eventid !== '0')
+				? ($recovery_clocks[$r_eventid] ?? null)
+				: null;
+
+			$problem_windows[(string) $e['eventid']] = [
+				'name' => (string) $e['name'],
+				'severity' => (int) $e['severity'],
+				'clock' => (int) $e['clock'],
+				'r_clock' => $r_clock, // null = still active
+				'hids' => array_map('strval', array_column($e['hosts'] ?? [], 'hostid'))
+			];
+		}
+
+		// (2) Currently-active problems regardless of start time. Problem.get does not support
+		// selectHosts; the host comes via objectid (the triggerid), so triggerids are resolved to
+		// hostids with a follow-up Trigger.get (same model as host_group_grid). monitored => true
+		// keeps only enabled triggers on monitored hosts with enabled items, which drops problems
+		// left orphaned in the problem table by a since-disabled trigger (they are not real anymore).
+		$active_problems = API::Problem()->get([
+			'output' => ['eventid', 'objectid', 'clock', 'severity', 'name'],
+			'source' => 0,
+			'object' => 0,
+			'hostids' => $hostids
+		]);
+
+		if ($active_problems) {
+			$problem_triggerids = array_values(array_unique(array_column($active_problems, 'objectid')));
+			$trigger_hosts = API::Trigger()->get([
+				'output' => ['triggerid'],
+				'selectHosts' => ['hostid'],
+				'triggerids' => $problem_triggerids,
+				'monitored' => true,
+				'preservekeys' => true
+			]);
+
+			foreach ($active_problems as $p) {
+				$eid = (string) $p['eventid'];
+				if (isset($problem_windows[$eid])) {
+					continue; // already captured by (1)
+				}
+
+				$trigger = $trigger_hosts[$p['objectid']] ?? null;
+				if ($trigger === null) {
+					continue;
+				}
+
+				$problem_windows[$eid] = [
+					'name' => (string) $p['name'],
+					'severity' => (int) $p['severity'],
+					'clock' => (int) $p['clock'],
+					'r_clock' => null, // active
+					'hids' => array_map('strval', array_column($trigger['hosts'] ?? [], 'hostid'))
+				];
+			}
+		}
+
 		// hostid -> bucket index (0..23) -> max severity seen
 		// hostid -> bucket index (0..23) -> list of problems covering that bucket
 		$timeline_sev = [];
 		$timeline_problems = [];
 
-		foreach ($events as $e) {
-			$start = (int) $e['clock'];
-			$r_eventid = (string) ($e['r_eventid'] ?? '0');
-			$r_clock = ($r_eventid !== '' && $r_eventid !== '0')
-				? ($recovery_clocks[$r_eventid] ?? null)
-				: null;
+		foreach ($problem_windows as $eventid => $w) {
+			$start = $w['clock'];
+			$r_clock = $w['r_clock'];
 
 			// End of problem window: resolution time, or "now" if still active.
 			$end = $r_clock ?? $now;
@@ -169,7 +235,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$start_bucket = (int) floor(($start - $window_start) / 3600);
 			$end_bucket = (int) floor(($end - $window_start) / 3600);
 
-			// Clamp to today's 24-bucket window.
+			// Clamp to today's 24-bucket window (start may be before today for source (2)).
 			if ($start_bucket < 0) {
 				$start_bucket = 0;
 			}
@@ -180,20 +246,17 @@ class WidgetView extends CControllerDashboardWidgetView {
 				continue;
 			}
 
-			$sev = (int) $e['severity'];
-			$hids = array_column($e['hosts'] ?? [], 'hostid');
+			$sev = $w['severity'];
 
 			$problem_data = [
-				'eventid' => (string) $e['eventid'],
-				'name' => (string) $e['name'],
+				'eventid' => (string) $eventid,
+				'name' => $w['name'],
 				'severity' => $sev,
 				'clock' => $start,
 				'r_clock' => $r_clock // null = still active
 			];
 
-			foreach ($hids as $hid) {
-				$hid = (string) $hid;
-
+			foreach ($w['hids'] as $hid) {
 				for ($b = $start_bucket; $b <= $end_bucket; $b++) {
 					$cur = $timeline_sev[$hid][$b] ?? -1;
 					if ($sev > $cur) {
