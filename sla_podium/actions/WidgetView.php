@@ -12,24 +12,13 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$name = $this->getInput('name', $this->widget->getDefaultName());
 
 		$slaid_raw = $this->fields_values['slaid'] ?? [];
-		$serviceids_raw = $this->fields_values['serviceids'] ?? [];
-		$parent_raw = $this->fields_values['parent_serviceid'] ?? [];
 		$period_label = (string) ($this->fields_values['period_label'] ?? 'Último período');
-		$theme = (int) ($this->fields_values['theme'] ?? 0);
 
 		$slaid = is_array($slaid_raw) ? reset($slaid_raw) : $slaid_raw;
 		$slaid = $slaid !== false ? (string) $slaid : '';
 
-		$serviceids = array_values(array_filter(array_map('strval', (array) $serviceids_raw)));
-
-		$parent_serviceid = is_array($parent_raw) ? reset($parent_raw) : $parent_raw;
-		$parent_serviceid = $parent_serviceid !== false && $parent_serviceid !== null
-			? (string) $parent_serviceid
-			: '';
-
 		$empty = [
 			'name' => $name,
-			'theme' => $theme,
 			'period_label' => $period_label,
 			'slo' => 0.0,
 			'period_from' => 0,
@@ -42,8 +31,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'user' => ['debug_mode' => $this->getDebugMode()]
 		];
 
-		if ($slaid === '' || !$serviceids) {
-			$empty['error'] = 'Selecione um SLA e ao menos um serviço.';
+		if ($slaid === '') {
+			$empty['error'] = 'Selecione um SLA.';
 			$this->setResponse(new CControllerResponseData($empty));
 
 			return;
@@ -70,26 +59,26 @@ class WidgetView extends CControllerDashboardWidgetView {
 			return;
 		}
 
-		// Only keep services that actually belong to this SLA and are accessible.
+		// O próprio SLA já filtra os serviços de interesse (ex.: só câmeras ou
+		// só mikrotiks). Pegamos tudo o que está atrelado a ele.
 		$services = API::Service()->get([
 			'output' => ['serviceid', 'name'],
-			'serviceids' => $serviceids,
 			'slaids' => $sla['slaid'],
 			'preservekeys' => true
 		]);
 
 		if (!$services) {
-			$empty['error'] = 'Nenhum serviço encontrado para este SLA.';
+			$empty['error'] = 'Nenhum serviço associado a este SLA.';
 			$this->setResponse(new CControllerResponseData($empty));
 
 			return;
 		}
 
-		$ordered_serviceids = array_values(array_intersect($serviceids, array_keys($services)));
+		$serviceids = array_keys($services);
 
 		$sli_resp = API::Sla()->getSli([
 			'slaid' => $sla['slaid'],
-			'serviceids' => $ordered_serviceids,
+			'serviceids' => $serviceids,
 			'periods' => 1
 		]);
 
@@ -100,14 +89,12 @@ class WidgetView extends CControllerDashboardWidgetView {
 			return;
 		}
 
-		// getSli returns: periods[i], serviceids[j], sli[i][j] => {sli, uptime, downtime, error_budget, ...}
 		$period_index = array_key_first($sli_resp['periods']);
 		$period = $sli_resp['periods'][$period_index];
 		$service_index_by_id = array_flip($sli_resp['serviceids']);
 
 		$slo = (float) $sla['slo'];
 
-		// Build a flat list: one entry per service with its SLI.
 		$entries = [];
 
 		foreach ($services as $sid => $service) {
@@ -123,28 +110,17 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 
 			$pct = (float) $row['sli'];
-			$uptime = (int) $row['uptime'];
-			$downtime = (int) $row['downtime'];
-			$error_budget = (int) $row['error_budget'];
 
 			$entries[$sid] = [
 				'serviceid' => (string) $sid,
 				'name' => $service['name'],
 				'sli' => $pct,
-				'uptime' => $uptime,
-				'downtime' => $downtime,
-				'error_budget' => $error_budget,
+				'uptime' => (int) $row['uptime'],
+				'downtime' => (int) $row['downtime'],
+				'error_budget' => (int) $row['error_budget'],
 				'status' => self::classify($pct, $slo),
 				'meets_slo' => $pct >= $slo
 			];
-		}
-
-		// Split off the parent service if configured.
-		$summary = null;
-
-		if ($parent_serviceid !== '' && isset($entries[$parent_serviceid])) {
-			$summary = $entries[$parent_serviceid];
-			unset($entries[$parent_serviceid]);
 		}
 
 		// Resolve hostid for each entry by matching host.name == service.name.
@@ -170,14 +146,12 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 		unset($entry_ref);
 
-		// Sort ascending by SLI — worst first.
 		uasort($entries, static function (array $a, array $b): int {
 			return $a['sli'] <=> $b['sli'];
 		});
 
 		$entries = array_values($entries);
 
-		// Tally fleet membership (using whatever stays in the ranking — i.e. children only).
 		$totals = ['in' => 0, 'out' => 0, 'total' => count($entries)];
 
 		foreach ($entries as $e) {
@@ -189,8 +163,9 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
-		// If no parent was picked, build a synthetic summary as the arithmetic mean of children.
-		if ($summary === null && $entries) {
+		$summary = null;
+
+		if ($entries) {
 			$avg = array_sum(array_column($entries, 'sli')) / count($entries);
 
 			$summary = [
@@ -205,17 +180,12 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'synthetic' => true
 			];
 		}
-		elseif ($summary !== null) {
-			$summary['synthetic'] = false;
-		}
 
-		// Split top 3 worst into "podium" cards; the rest goes into the scrollable list.
 		$worst = array_slice($entries, 0, 3);
 		$rest = array_slice($entries, 3);
 
 		$this->setResponse(new CControllerResponseData([
 			'name' => $name,
-			'theme' => $theme,
 			'period_label' => $period_label,
 			'sla_name' => $sla['name'],
 			'slo' => $slo,
@@ -243,7 +213,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 			return 'warn';
 		}
 
-		// At or above the SLO — call it "excellent" only when there's real headroom.
 		if ($pct >= $slo + 0.5 && $pct >= 99.5) {
 			return 'excellent';
 		}

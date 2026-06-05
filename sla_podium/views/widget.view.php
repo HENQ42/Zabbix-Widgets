@@ -9,9 +9,6 @@
 
 $view = new CWidgetView($data);
 
-$theme = (int) ($data['theme'] ?? 0);
-$theme_attr = $theme === 1 ? 'dark' : 'light';
-
 $slo = (float) ($data['slo'] ?? 0.0);
 
 // Bullet-bar scale. Floor is the left edge of the bar; everything below the
@@ -136,10 +133,10 @@ $css = <<<CSS
 	padding: 0;
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: #fff;
+	background: var(--bg-page);
 	overflow: hidden;
 }
-.slap-wrap[data-theme="dark"] {
+:root[color-scheme="dark"] .slap-wrap {
 	--surface:    oklch(0.22 0.012 255);
 	--surface-2:  oklch(0.26 0.012 255);
 	--surface-3:  oklch(0.30 0.012 255);
@@ -178,7 +175,6 @@ $css = <<<CSS
 .widget {
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: #fff;
 	border: 0;
 	border-radius: 0;
 	box-shadow: none;
@@ -359,8 +355,7 @@ $css = <<<CSS
 CSS;
 
 $wrap = (new CDiv())
-	->addClass('slap-wrap')
-	->setAttribute('data-theme', $theme_attr);
+	->addClass('slap-wrap');
 
 // Error / empty state.
 if (!empty($data['error'])) {
