@@ -136,6 +136,7 @@ class CWidgetFieldItemRowsView extends CWidgetFieldView {
 		$prefix = $name.'['.$row_num.']';
 
 		$target = (string) ($data['target'] ?? CWidgetFieldItemRows::TARGET_SWITCH);
+		$type = $data['type'] ?? '';
 		$label = $data['label'] ?? '';
 		$regex = $data['regex'] ?? '';
 		$bold = (int) ($data['bold'] ?? 0);
@@ -180,6 +181,13 @@ class CWidgetFieldItemRowsView extends CWidgetFieldView {
 					->addValue(_('Edge Router'), CWidgetFieldItemRows::TARGET_SWITCH)
 					->addValue(_('Camera'), CWidgetFieldItemRows::TARGET_CAMERA)
 					->setModern()
+			),
+
+			new CLabel(_('Camera type'), zbx_formatDomId($prefix.'[type]')),
+			new CDiv(
+				(new CTextBox($prefix.'[type]', $type, false))
+					->setAttribute('placeholder', _('PTX (camera only, empty = all)'))
+					->setWidth(ZBX_TEXTAREA_SMALL_WIDTH)
 			),
 
 			new CLabel(_('Item'), zbx_formatDomId($prefix.'[itemid]')),

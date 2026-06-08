@@ -10,6 +10,7 @@ use Zabbix\Widgets\Fields\{
 	CWidgetFieldMultiSelectItem
 };
 use Modules\HostGroupGrid\Includes\CWidgetFieldItemRows;
+use Modules\HostGroupGrid\Includes\CWidgetFieldCameraRows;
 
 class WidgetForm extends CWidgetForm {
 
@@ -28,8 +29,11 @@ class WidgetForm extends CWidgetForm {
 					->setMultiple(false)
 			)
 			->addField(
-				(new CWidgetFieldMultiSelectItem('camera_online_itemid', _('Camera online item')))
+				(new CWidgetFieldMultiSelectItem('camera_online_itemid', _('Camera online item (default)')))
 					->setMultiple(false)
+			)
+			->addField(
+				new CWidgetFieldCameraRows('camera_online_items', _('Camera online items (by type)'))
 			)
 			->addField(
 				(new CWidgetFieldIntegerBox('columns', _('Columns'), 1, 12))

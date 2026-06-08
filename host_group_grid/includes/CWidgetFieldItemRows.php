@@ -18,6 +18,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 	public const DEFAULT_ROW = [
 		'itemid' => 0,
 		'target' => self::TARGET_SWITCH,
+		'type' => '',
 		'label' => '',
 		'regex' => '',
 		'bold' => 0,
@@ -41,6 +42,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 			->setValidationRules(['type' => API_OBJECTS, 'fields' => [
 				'itemid' => ['type' => API_ID],
 				'target' => ['type' => API_STRING_UTF8, 'in' => self::TARGET_SWITCH.','.self::TARGET_CAMERA],
+				'type' => ['type' => API_STRING_UTF8, 'length' => 50],
 				'label' => ['type' => API_STRING_UTF8, 'length' => 255],
 				'regex' => ['type' => API_STRING_UTF8, 'length' => 500],
 				'bold' => ['type' => API_INT32, 'in' => '0,1'],
@@ -101,6 +103,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 			$rows[] = [
 				'itemid' => (string) $itemid,
 				'target' => $target,
+				'type' => trim((string) ($row['type'] ?? '')),
 				'label' => (string) ($row['label'] ?? ''),
 				'regex' => (string) ($row['regex'] ?? ''),
 				'bold' => (int) ($row['bold'] ?? 0),
@@ -140,6 +143,11 @@ class CWidgetFieldItemRows extends CWidgetField {
 				'type' => ZBX_WIDGET_FIELD_TYPE_STR,
 				'name' => $this->name.'.'.$i.'.target',
 				'value' => $row['target']
+			];
+			$widget_fields[] = [
+				'type' => ZBX_WIDGET_FIELD_TYPE_STR,
+				'name' => $this->name.'.'.$i.'.type',
+				'value' => $row['type']
 			];
 			$widget_fields[] = [
 				'type' => ZBX_WIDGET_FIELD_TYPE_STR,

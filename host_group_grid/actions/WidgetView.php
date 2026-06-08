@@ -16,18 +16,24 @@ class WidgetView extends CControllerDashboardWidgetView {
 	// colliding on the numeric portion alone.
 	private const SITE_REGEX = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
 
+	// Captures the TIPO token of the nomenclature (the field right after the 2-digit site number), e.g.
+	// `SEFAZ_AL_03_PTX_SENTIDO_NORTE-SUL` -> tipo=`PTX`. Hosts without a type (e.g. `SEFAZ_AL_03`) yield null.
+	private const TYPE_REGEX = '/^.+?_\d{2}_(?P<tipo>[A-Z0-9]+)/i';
+
 	protected function doAction(): void {
 		$name = $this->getInput('name', $this->widget->getDefaultName());
 
 		$switch_groupids = $this->fields_values['switch_groupids'] ?? [];
 		$camera_groupids = $this->fields_values['camera_groupids'] ?? [];
 		$switch_online_itemid = $this->fields_values['switch_online_itemid'] ?? [];
-		$camera_online_itemid = $this->fields_values['camera_online_itemid'] ?? [];
 		$columns = (int) ($this->fields_values['columns'] ?? 3);
 
 		// Resolve item key from the picked itemid (same key is then matched on every host of the group).
 		$switch_online_key = $this->resolveItemKey($switch_online_itemid);
-		$camera_online_key = $this->resolveItemKey($camera_online_itemid);
+
+		// Camera "online" is resolved per camera TYPE: each configured row pairs an item key with a TIPO
+		// (PTX, PTZ, ...). The legacy single field becomes the untyped fallback row.
+		$camera_online_rows = $this->resolveCameraOnlineRows();
 
 		if ($columns < 1) {
 			$columns = 1;
@@ -121,7 +127,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 		// Resolve "online" status per host via the configured item keys (lastvalue == "1" => online).
 		$switch_online_hostids = $this->fetchOnlineHostids($switch_hosts, $switch_online_key);
-		$camera_online_hostids = $this->fetchOnlineHostids($camera_hosts, $camera_online_key);
+		$camera_online_map = $this->computeCameraOnline($camera_hosts, $camera_online_rows);
 
 		// Collect every relevant hostid for a single bulk events query.
 		$all_hostids = [];
@@ -412,7 +418,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 			$camera_active = 0;
 			foreach ($cameras as $hid => $host) {
-				if ($camera_online_key === '' || isset($camera_online_hostids[(string) $hid])) {
+				if ($camera_online_map[(string) $hid] ?? false) {
 					$camera_active++;
 				}
 			}
@@ -494,7 +500,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 						$is_online = ($switch_online_key === '' || isset($switch_online_hostids[$hid_s]));
 					}
 					else {
-						$is_online = ($camera_online_key === '' || isset($camera_online_hostids[$hid_s]));
+						$is_online = $camera_online_map[$hid_s] ?? false;
 					}
 
 					$h_timeline = [];
@@ -541,6 +547,17 @@ class WidgetView extends CControllerDashboardWidgetView {
 						$row_target = (string) ($row['target'] ?? CWidgetFieldItemRows::TARGET_SWITCH);
 						if ($row_target !== $type) {
 							continue;
+						}
+						// Camera rows may be restricted to a specific TYPE (PTX, PTZ, ...). An empty type
+						// applies to every camera (backward compatible).
+						if ($type === 'camera') {
+							$row_type = strtoupper(trim((string) ($row['type'] ?? '')));
+							if ($row_type !== '') {
+								$host_type = $this->extractType((string) $host_obj['host']);
+								if ($host_type === null || $row_type !== $host_type) {
+									continue;
+								}
+							}
 						}
 						$src_item = $src_items[$row['itemid'] ?? 0] ?? null;
 						if ($src_item === null) {
@@ -672,6 +689,150 @@ class WidgetView extends CControllerDashboardWidgetView {
 			return $m['prefix'].'_'.$m['site'];
 		}
 		return null;
+	}
+
+	/**
+	 * Extract the canonical TIPO token (uppercased) from a host technical name, or null if the host
+	 * carries no type (e.g. the short Mikrotik form `SEFAZ_AL_03`).
+	 */
+	private function extractType(string $host_technical_name): ?string {
+		if (preg_match(self::TYPE_REGEX, $host_technical_name, $m)) {
+			return strtoupper($m['tipo']);
+		}
+		return null;
+	}
+
+	/**
+	 * Resolve the configured camera "online" rows into a list of ['key' => ..., 'type' => ...].
+	 * Combines the multi-row per-type field (camera_online_items) with the legacy single field
+	 * (camera_online_itemid), which is treated as the untyped fallback row. TYPE is uppercased.
+	 */
+	private function resolveCameraOnlineRows(): array {
+		$rows_cfg = $this->fields_values['camera_online_items'] ?? [];
+		$legacy = $this->fields_values['camera_online_itemid'] ?? [];
+
+		$itemids = [];
+		foreach ($rows_cfg as $row) {
+			if (!empty($row['itemid'])) {
+				$itemids[] = (int) $row['itemid'];
+			}
+		}
+
+		$legacy_itemid = 0;
+		if ($legacy) {
+			$legacy_itemid = (int) (is_array($legacy) ? (reset($legacy) ?: 0) : $legacy);
+			if ($legacy_itemid > 0) {
+				$itemids[] = $legacy_itemid;
+			}
+		}
+
+		$itemids = array_values(array_unique(array_filter($itemids)));
+
+		if (!$itemids) {
+			return [];
+		}
+
+		$items = API::Item()->get([
+			'output' => ['itemid', 'key_'],
+			'itemids' => $itemids,
+			'webitems' => true,
+			'preservekeys' => true
+		]);
+
+		$rows = [];
+		foreach ($rows_cfg as $row) {
+			$itemid = (int) ($row['itemid'] ?? 0);
+			if ($itemid <= 0 || !isset($items[$itemid])) {
+				continue;
+			}
+			$rows[] = [
+				'key' => (string) $items[$itemid]['key_'],
+				'type' => strtoupper(trim((string) ($row['type'] ?? '')))
+			];
+		}
+
+		if ($legacy_itemid > 0 && isset($items[$legacy_itemid])) {
+			$rows[] = [
+				'key' => (string) $items[$legacy_itemid]['key_'],
+				'type' => ''
+			];
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Build a [hostid => bool] online map for camera hosts.
+	 *
+	 * - No rows configured at all → every enabled camera counts as online (legacy default).
+	 * - Otherwise the best matching row for the camera's TYPE is used (exact type first, then an
+	 *   untyped fallback row). If no row matches the camera's type, the camera is NOT counted as
+	 *   online. A matched row marks the host online iff its key's lastvalue == "1".
+	 */
+	private function computeCameraOnline(array $camera_hosts, array $online_rows): array {
+		$map = [];
+
+		if (!$online_rows) {
+			foreach ($camera_hosts as $hid => $_host) {
+				$map[(string) $hid] = true;
+			}
+			return $map;
+		}
+
+		$keys = array_values(array_unique(array_filter(array_column($online_rows, 'key'),
+			static function ($k) { return $k !== ''; }
+		)));
+
+		$lastvalues = []; // hostid => key => lastvalue
+		if ($keys && $camera_hosts) {
+			$items = API::Item()->get([
+				'output' => ['hostid', 'key_', 'lastvalue'],
+				'hostids' => array_keys($camera_hosts),
+				'filter' => ['key_' => $keys],
+				'webitems' => true
+			]);
+			foreach ($items as $item) {
+				$lastvalues[(string) $item['hostid']][$item['key_']] = (string) ($item['lastvalue'] ?? '');
+			}
+		}
+
+		foreach ($camera_hosts as $hid => $host) {
+			$hid_s = (string) $hid;
+			$type = $this->extractType((string) $host['host']);
+			$row = $this->matchTypeRow($online_rows, $type);
+
+			if ($row === null || $row['key'] === '') {
+				$map[$hid_s] = false;
+				continue;
+			}
+
+			$map[$hid_s] = (($lastvalues[$hid_s][$row['key']] ?? null) === '1');
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Pick the best matching row for a camera TYPE: an exact (case-insensitive) type match wins;
+	 * otherwise the first untyped row is used as fallback. Returns null when neither exists.
+	 */
+	private function matchTypeRow(array $rows, ?string $type): ?array {
+		$fallback = null;
+
+		foreach ($rows as $row) {
+			$row_type = (string) ($row['type'] ?? '');
+			if ($row_type === '') {
+				if ($fallback === null) {
+					$fallback = $row;
+				}
+				continue;
+			}
+			if ($type !== null && $row_type === $type) {
+				return $row;
+			}
+		}
+
+		return $fallback;
 	}
 
 	/**
