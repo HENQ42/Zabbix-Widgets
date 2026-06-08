@@ -66,12 +66,9 @@ else {
 			flex-direction: column;
 			min-width: 0;
 			overflow: hidden;
-			transform-origin: center;
-			transition: transform 0.2s ease, box-shadow 0.2s ease;
-			will-change: transform;
+			transition: box-shadow 0.2s ease;
 		}
 		.hggrid-box:hover {
-			transform: scale(1.03);
 			box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 			z-index: 1;
 		}
