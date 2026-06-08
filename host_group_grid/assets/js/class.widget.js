@@ -269,6 +269,9 @@ class CWidgetHostGroupGrid extends CWidget {
             +     esc(swTotal) + ' Edge Router' + (swTotal === 1 ? '' : 's')
             +     ' · ' + esc(camTotal) + ' ' + (camTotal === 1 ? 'câmera' : 'câmeras')
             +   '</div>'
+            +   (site.site_type
+                    ? '<span class="hggrid-site-type" title="' + esc(site.site_type) + '">' + esc(site.site_type) + '</span>'
+                    : '')
             +   '<span class="hggrid-status ' + site.state + '" '
             +     'style="background-color:#' + siteMeta.bg + ';color:#' + siteMeta.color + ';">'
             +     '<span class="hggrid-status-dot"></span>' + siteMeta.label

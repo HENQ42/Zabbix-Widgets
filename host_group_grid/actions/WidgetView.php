@@ -28,6 +28,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$switch_online_itemid = $this->fields_values['switch_online_itemid'] ?? [];
 		$columns = (int) ($this->fields_values['columns'] ?? 3);
 
+		// Optional host-tag name carrying the "site type" label. Lives only on the Edge Router host.
+		// Empty => feature disabled (no type badge rendered).
+		$site_type_tag = trim((string) ($this->fields_values['site_type_tag'] ?? ''));
+
 		// Resolve item key from the picked itemid (same key is then matched on every host of the group).
 		$switch_online_key = $this->resolveItemKey($switch_online_itemid);
 
@@ -62,8 +66,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 
 		// Fetch only enabled (monitored) hosts — disabled ones are ignored entirely.
+		// Edge Routers carry the optional "site type" tag, so pull tags only when the feature is enabled.
 		$switch_hosts = API::Host()->get([
 			'output' => ['hostid', 'host', 'name'],
+			'selectTags' => ($site_type_tag !== '') ? ['tag', 'value'] : [],
 			'groupids' => $switch_groupids,
 			'monitored_hosts' => true,
 			'preservekeys' => true
@@ -639,10 +645,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$output_sites[] = [
 				'site_id' => $site_id,
 				'site_label' => $site_id,
+				'site_type' => $this->extractSiteType($switches, $site_type_tag),
 				'switch_total' => $switch_count,
 				'switch_active' => $switch_active,
 				'camera_total' => $camera_count,
 				'camera_active' => $camera_active,
+				'types' => $this->buildTypeBadges(
+					$switches, $cameras, $switch_online_key, $switch_online_hostids, $camera_online_map
+				),
 				'state' => $state,
 				'state_rank' => $state_rank,
 				'timeline' => $timeline,
@@ -700,6 +710,94 @@ class WidgetView extends CControllerDashboardWidgetView {
 			return strtoupper($m['tipo']);
 		}
 		return null;
+	}
+
+	/**
+	 * Build the per-TIPO active/total list rendered as card badges.
+	 *
+	 * The TIPO comes purely from the canonical nomenclature (the token right after the site number).
+	 * Edge Routers with no type token use the implicit MIKROTIK type (short form `SEFAZ_AL_NN`);
+	 * cameras that don't parse fall back to OUTROS so misnamed hosts surface rather than vanish.
+	 * Edge-Router-origin types are listed before camera-origin types; within each origin, natural
+	 * name order. "Online" reuses the same resolution as the rest of the widget (switch_online_key
+	 * for switches, the precomputed camera-online map for cameras).
+	 *
+	 * @return array<int, array{type: string, origin: string, active: int, total: int}>
+	 */
+	private function buildTypeBadges(array $switches, array $cameras, string $switch_online_key,
+			array $switch_online_hostids, array $camera_online_map): array {
+		$groups = ['switch' => [], 'camera' => []];
+
+		foreach ($switches as $hid => $host) {
+			$type = $this->extractType((string) $host['host']) ?? 'MIKROTIK';
+			$online = ($switch_online_key === '' || isset($switch_online_hostids[(string) $hid]));
+			if (!isset($groups['switch'][$type])) {
+				$groups['switch'][$type] = ['active' => 0, 'total' => 0];
+			}
+			$groups['switch'][$type]['total']++;
+			if ($online) {
+				$groups['switch'][$type]['active']++;
+			}
+		}
+
+		foreach ($cameras as $hid => $host) {
+			$type = $this->extractType((string) $host['host']) ?? 'OUTROS';
+			$online = $camera_online_map[(string) $hid] ?? false;
+			if (!isset($groups['camera'][$type])) {
+				$groups['camera'][$type] = ['active' => 0, 'total' => 0];
+			}
+			$groups['camera'][$type]['total']++;
+			if ($online) {
+				$groups['camera'][$type]['active']++;
+			}
+		}
+
+		$badges = [];
+		foreach (['switch', 'camera'] as $origin) {
+			$types = $groups[$origin];
+			uksort($types, 'strnatcasecmp');
+			foreach ($types as $type => $counts) {
+				$badges[] = [
+					'type' => (string) $type,
+					'origin' => $origin,
+					'active' => (int) $counts['active'],
+					'total' => (int) $counts['total']
+				];
+			}
+		}
+
+		return $badges;
+	}
+
+	/**
+	 * Resolve the "site type" label for a site from the configured host tag.
+	 *
+	 * The tag lives only on the Edge Router host(s) of the site. Switches are scanned in a stable
+	 * (natural-name) order and the first non-empty value of a tag whose name matches $tag_name wins.
+	 * Returns '' when the feature is disabled, the site has no Edge Router, or none carries the tag.
+	 */
+	private function extractSiteType(array $switches, string $tag_name): string {
+		if ($tag_name === '' || !$switches) {
+			return '';
+		}
+
+		$ordered = array_values($switches);
+		usort($ordered, static function ($a, $b) {
+			return strnatcasecmp((string) ($a['host'] ?? ''), (string) ($b['host'] ?? ''));
+		});
+
+		foreach ($ordered as $host) {
+			foreach (($host['tags'] ?? []) as $tag) {
+				if ((string) ($tag['tag'] ?? '') === $tag_name) {
+					$value = trim((string) ($tag['value'] ?? ''));
+					if ($value !== '') {
+						return $value;
+					}
+				}
+			}
+		}
+
+		return '';
 	}
 
 	/**

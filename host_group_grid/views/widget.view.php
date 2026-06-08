@@ -109,6 +109,24 @@ else {
 			border-radius: 50%;
 			background: currentColor;
 		}
+		.hggrid-site-type {
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			max-width: 45%;
+			padding: 2px 8px;
+			border-radius: 999px;
+			font-size: 9px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			line-height: 1.4;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			background: color-mix(in srgb, var(--hggrid-accent) 18%, transparent);
+			color: var(--hggrid-accent);
+		}
 		.hggrid-status.critical .hggrid-status-dot {
 			animation: pulse-dot 1.4s ease-out infinite;
 		}
@@ -119,29 +137,29 @@ else {
 		}
 		.hggrid-badges {
 			display: flex;
-			gap: 6px;
+			align-items: center;
+			gap: 8px;
 			margin-bottom: 8px;
 			flex-wrap: wrap;
 		}
-		.hggrid-badge {
+		.hggrid-typebadge {
 			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			padding: 2px 8px;
-			border-radius: 12px;
+			align-items: baseline;
+			gap: 5px;
 			font-size: 11px;
-			font-weight: 600;
-			border: 1.5px solid;
-			background: transparent;
+			font-weight: 700;
 			line-height: 1.4;
+			letter-spacing: 0.3px;
+			white-space: nowrap;
 		}
-		.hggrid-badge .hggrid-badge-icon { font-size: 12px; line-height: 1; }
-		.hggrid-badge.ok { border-color: #4CAF50; color: #2e7d32; }
-		.hggrid-badge.bad { border-color: #E53935; color: #c62828; }
-		.hggrid-badge.empty { border-color: #9e9e9e; color: #616161; }
-		:root[color-scheme="dark"] .hggrid-badge.ok { color: #1b5e20; }
-		:root[color-scheme="dark"] .hggrid-badge.bad { color: #b71c1c; }
-		:root[color-scheme="dark"] .hggrid-badge.empty { color: #424242; }
+		.hggrid-typebadge-name { text-transform: uppercase; }
+		.hggrid-typebadge-count { font-weight: 600; font-variant-numeric: tabular-nums; }
+		.hggrid-typebadge-sep {
+			color: var(--hggrid-text);
+			opacity: 0.3;
+			font-weight: 700;
+			align-self: center;
+		}
 		.hggrid-timeline {
 			display: grid;
 			grid-template-columns: repeat(12, 1fr);
@@ -214,39 +232,55 @@ else {
 			->addClass($state)
 			->addStyle('background-color: #'.$status_bg.'; color: #'.$stripe_color.';');
 
-		$box->addItem((new CDiv([$site_num, $status_badge]))->addClass('hggrid-header'));
+		// Optional site-type badge (left of the status badge). Rendered only when a type is resolved.
+		$header_items = [$site_num];
+		$site_type = (string) ($site['site_type'] ?? '');
+		if ($site_type !== '') {
+			$header_items[] = (new CSpan($site_type))
+				->addClass('hggrid-site-type')
+				->setAttribute('title', $site_type);
+		}
+		$header_items[] = $status_badge;
 
-		// Badges row.
-		$sw_total = (int) $site['switch_total'];
-		$cam_total = (int) $site['camera_total'];
-		$sw_class = $sw_total === 0 ? 'empty' : (((int) $site['switch_active'] === $sw_total) ? 'ok' : 'bad');
-		$cam_class = $cam_total === 0 ? 'empty' : (((int) $site['camera_active'] === $cam_total) ? 'ok' : 'bad');
+		$box->addItem((new CDiv($header_items))->addClass('hggrid-header'));
 
-		$switch_badge = (new CSpan([
-			(new CSpan('⇄'))->addClass('hggrid-badge-icon'),
-			' Edge Router ',
-			$site['switch_active'].'/'.$site['switch_total']
-		]))
-			->addClass('hggrid-badge')
-			->addClass($sw_class)
-			->setAttribute('title',
-				_('Edge Routers').': '.$site['switch_active'].' '._('ativos').' / '.$site['switch_total'].' '._('total')
-			);
+		// Badges row: one badge per TIPO (derived from the nomenclature), formatted "<TIPO> ativo/total".
+		// No border — only the text colour reflects health: all active => stable, none => critical,
+		// partial => warning. Edge-Router types come first, then camera types (see buildTypeBadges()).
+		$types = $site['types'] ?? [];
+		if ($types) {
+			$badge_items = [];
+			foreach ($types as $idx => $t) {
+				$t_total = (int) $t['total'];
+				$t_active = (int) $t['active'];
 
-		$camera_badge = (new CSpan([
-			(new CSpan('◉'))->addClass('hggrid-badge-icon'),
-			' Câmera ',
-			$site['camera_active'].'/'.$site['camera_total']
-		]))
-			->addClass('hggrid-badge')
-			->addClass($cam_class)
-			->setAttribute('title',
-				_('Câmeras').': '.$site['camera_active'].' '._('ativas').' / '.$site['camera_total'].' '._('total')
-			);
+				if ($t_active >= $t_total) {
+					$t_color = $color_stable;
+				}
+				elseif ($t_active === 0) {
+					$t_color = $color_critical;
+				}
+				else {
+					$t_color = $color_warning;
+				}
 
-		$box->addItem(
-			(new CDiv([$switch_badge, $camera_badge]))->addClass('hggrid-badges')
-		);
+				if ($idx > 0) {
+					$badge_items[] = (new CSpan('·'))->addClass('hggrid-typebadge-sep');
+				}
+
+				$badge_items[] = (new CSpan([
+					(new CSpan($t['type']))->addClass('hggrid-typebadge-name'),
+					(new CSpan($t_active.'/'.$t_total))->addClass('hggrid-typebadge-count')
+				]))
+					->addClass('hggrid-typebadge')
+					->addStyle('color: #'.$t_color.';')
+					->setAttribute('title',
+						$t['type'].': '.$t_active.' '._('ativos').' / '.$t_total.' '._('total')
+					);
+			}
+
+			$box->addItem((new CDiv($badge_items))->addClass('hggrid-badges'));
+		}
 
 		// Timeline 24h (two rows of 12 cells).
 		if (!empty($site['timeline'])) {
@@ -314,10 +348,12 @@ else {
 		$detail_payload[] = [
 			'site_id' => $site['site_id'],
 			'site_label' => $site['site_label'],
+			'site_type' => $site['site_type'] ?? '',
 			'switch_total' => $site['switch_total'],
 			'switch_active' => $site['switch_active'],
 			'camera_total' => $site['camera_total'],
 			'camera_active' => $site['camera_active'],
+			'types' => $site['types'] ?? [],
 			'state' => $site['state'],
 			'hosts' => $site['hosts'] ?? []
 		];

@@ -7,7 +7,8 @@ use Zabbix\Widgets\Fields\{
 	CWidgetFieldColor,
 	CWidgetFieldIntegerBox,
 	CWidgetFieldMultiSelectGroup,
-	CWidgetFieldMultiSelectItem
+	CWidgetFieldMultiSelectItem,
+	CWidgetFieldTextBox
 };
 use Modules\HostGroupGrid\Includes\CWidgetFieldItemRows;
 use Modules\HostGroupGrid\Includes\CWidgetFieldCameraRows;
@@ -27,6 +28,10 @@ class WidgetForm extends CWidgetForm {
 			->addField(
 				(new CWidgetFieldMultiSelectItem('switch_online_itemid', _('Edge Router online item')))
 					->setMultiple(false)
+			)
+			->addField(
+				(new CWidgetFieldTextBox('site_type_tag', _('Site type tag name')))
+					->setDefault('')
 			)
 			->addField(
 				(new CWidgetFieldMultiSelectItem('camera_online_itemid', _('Camera online item (default)')))
