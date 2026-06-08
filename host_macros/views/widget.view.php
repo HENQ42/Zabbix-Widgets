@@ -73,6 +73,7 @@ $css = <<<CSS
 	.hmacro-wrap {
 		height: 100%;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 12px;
 		box-sizing: border-box;
 		color: var(--hmacro-text);

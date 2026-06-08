@@ -379,7 +379,7 @@ class CWidgetHostGroupGrid extends CWidget {
         head.appendChild(closeBtn);
 
         const body = document.createElement('div');
-        body.style.cssText = 'overflow-y:auto;flex:1;padding:10px 14px;';
+        body.style.cssText = 'overflow-y:auto;overscroll-behavior:contain;flex:1;padding:10px 14px;';
 
         const renderProblem = (p) => {
             const sevIdx = Math.max(0, Math.min(5, p.severity | 0));
