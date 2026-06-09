@@ -160,6 +160,51 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'sortorder' => 'ASC'
 		]);
 
+		// Recovery (OK) events that fired today. These catch the gap left by the two queries that
+		// follow: a problem that STARTED before 00:00 today (so it is absent from the today-windowed
+		// events query above) but was RESOLVED at some point today (so it is no longer in the active
+		// Problem.get set below). Without this it would leave today's cells green up to the moment of
+		// resolution. The Event API has no reverse recovery->problem link and its `filter` does not
+		// accept r_eventid, so we correlate via objectid (the triggerid, shared by a problem and its
+		// recovery) and then keep only the problems whose r_eventid is in today's recovery set.
+		$todays_recoveries = API::Event()->get([
+			'output' => ['eventid', 'clock', 'objectid'],
+			'source' => 0,
+			'object' => 0,
+			'value' => 0,
+			'hostids' => $all_hostids,
+			'time_from' => $window_start,
+			'preservekeys' => true
+		]);
+
+		$old_resolved = [];
+		$recovery_eventids = array_keys($todays_recoveries);
+		if ($recovery_eventids) {
+			$recovery_objectids = array_values(array_unique(array_column($todays_recoveries, 'objectid')));
+
+			$candidates = API::Event()->get([
+				'output' => ['eventid', 'objectid', 'clock', 'severity', 'name', 'r_eventid'],
+				'selectHosts' => ['hostid', 'name'],
+				'source' => 0,
+				'object' => 0,
+				'value' => 1,
+				'hostids' => $all_hostids,
+				'objectids' => $recovery_objectids,
+				// Started BEFORE today; problems that started today are already in $events above, so
+				// this bound guarantees no overlap (no double painting).
+				'time_till' => $window_start - 1,
+				'sortfield' => ['clock'],
+				'sortorder' => 'DESC'
+			]);
+
+			// Keep only problem events whose recovery is in today's recovery set (objectids may match
+			// older, unrelated incidents on the same trigger). r_eventid carries the recovery linkage.
+			$recovery_set = array_flip(array_map('strval', $recovery_eventids));
+			$old_resolved = array_values(array_filter($candidates, static function ($e) use ($recovery_set) {
+				return isset($recovery_set[(string) ($e['r_eventid'] ?? '0')]);
+			}));
+		}
+
 		$recovery_ids = [];
 		foreach ($events as $e) {
 			if (!empty($e['r_eventid']) && $e['r_eventid'] !== '0') {
@@ -179,6 +224,15 @@ class WidgetView extends CControllerDashboardWidgetView {
 				$recovery_clocks[(string) $eid] = (int) $rv['clock'];
 			}
 		}
+
+		// Feed the old-but-resolved-today problems into the same machinery as the regular events. Their
+		// recovery clocks come straight from the today's-recoveries query. The main loop below then paints
+		// buckets from 00:00 (start_bucket clamps to 0) up to the recovery hour, and leaves them out of the
+		// active-problem badge because their r_clock is non-null.
+		foreach ($todays_recoveries as $eid => $rv) {
+			$recovery_clocks[(string) $eid] = (int) $rv['clock'];
+		}
+		$events = array_merge($events, $old_resolved);
 
 		// Per-hostid: which hosts currently have an unresolved problem (used for the "ativo" badge).
 		$hosts_with_active_problem = [];
