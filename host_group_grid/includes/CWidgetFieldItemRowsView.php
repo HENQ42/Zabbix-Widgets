@@ -140,6 +140,7 @@ class CWidgetFieldItemRowsView extends CWidgetFieldView {
 		$label = $data['label'] ?? '';
 		$regex = $data['regex'] ?? '';
 		$bold = (int) ($data['bold'] ?? 0);
+		$dependent = (int) ($data['dependent'] ?? 0);
 		$default_color = $data['default_color'] ?? '';
 		$default_state = (int) ($data['default_state'] ?? CWidgetFieldItemRows::STATE_STABLE);
 		$conditions = $data['conditions'] ?? [];
@@ -211,6 +212,14 @@ class CWidgetFieldItemRowsView extends CWidgetFieldView {
 			(new CDiv([
 				new CVar($prefix.'[bold]', '0'),
 				(new CCheckBox($prefix.'[bold]', '1'))->setChecked($bold == 1)
+			])),
+
+			new CLabel(_('Dependent'), zbx_formatDomId($prefix.'[dependent]')),
+			(new CDiv([
+				new CVar($prefix.'[dependent]', '0'),
+				(new CCheckBox($prefix.'[dependent]', '1'))->setChecked($dependent == 1),
+				(new CDiv(_('Forced to critical when every non-dependent row of the same host is critical')))
+					->addStyle('font-size: 11px; opacity: 0.7; margin-top: 2px;')
 			])),
 
 			new CLabel(_('Default color')),

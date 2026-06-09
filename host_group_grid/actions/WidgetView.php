@@ -660,14 +660,75 @@ class WidgetView extends CControllerDashboardWidgetView {
 							$label = $item['name_resolved'] ?? $src_item['name'] ?? '';
 						}
 
+						// Pre-resolve this row's own "critical" condition (first one flagged critical), so a
+						// dependent row can later borrow its display text + colour when forced critical.
+						$crit_override = null;
+						foreach (($row['conditions'] ?? []) as $cond) {
+							if ((int) ($cond['state'] ?? CWidgetFieldItemRows::STATE_STABLE) === CWidgetFieldItemRows::STATE_CRITICAL) {
+								$crit_override = [
+									'display' => (string) ($cond['display'] ?? ''),
+									'color' => (string) ($cond['color'] ?? '')
+								];
+								break;
+							}
+						}
+
 						$host_rows[] = [
 							'label' => $label,
 							'value' => $value,
 							'color' => $color,
 							'bold' => (int) ($row['bold'] ?? 0) === 1,
-							'state' => $row_state
+							'state' => $row_state,
+							'dependent' => (int) ($row['dependent'] ?? 0) === 1,
+							'_crit' => $crit_override
 						];
 					}
+
+					// Dependency pass: a row flagged "dependent" carries a reading that is only meaningful
+					// while the rest of the host is up (e.g. a streaming check that can't succeed once the
+					// camera is unavailable). When EVERY non-dependent row of this host (already
+					// type-filtered) is itself critical, the dependent reading is stale, so we surface it as
+					// critical reusing the row's own predefined critical condition (its display text +
+					// colour). Falls back to the widget's critical colour when no such condition exists.
+					// Guarded by non_dependent_total > 0 so a host made only of dependent rows is never
+					// forced critical on a vacuously-true "all critical" check.
+					$non_dependent_total = 0;
+					$non_dependent_critical = 0;
+					$has_dependent = false;
+					foreach ($host_rows as $r) {
+						if (!empty($r['dependent'])) {
+							$has_dependent = true;
+							continue;
+						}
+						$non_dependent_total++;
+						if ((int) $r['state'] === CWidgetFieldItemRows::STATE_CRITICAL) {
+							$non_dependent_critical++;
+						}
+					}
+
+					if ($has_dependent && $non_dependent_total > 0
+							&& $non_dependent_critical === $non_dependent_total) {
+						foreach ($host_rows as &$r) {
+							if (empty($r['dependent']) || (int) $r['state'] === CWidgetFieldItemRows::STATE_CRITICAL) {
+								continue;
+							}
+							$r['state'] = CWidgetFieldItemRows::STATE_CRITICAL;
+							$override = $r['_crit'] ?? null;
+							if ($override !== null && $override['display'] !== '') {
+								$r['value'] = $override['display'];
+							}
+							$r['color'] = ($override !== null && $override['color'] !== '')
+								? $override['color']
+								: $color_critical;
+						}
+						unset($r);
+					}
+
+					// Drop the internal helper key before the row leaves the controller.
+					foreach ($host_rows as &$r) {
+						unset($r['_crit']);
+					}
+					unset($r);
 
 					$hosts_detail[] = [
 						'hostid' => $hid_s,

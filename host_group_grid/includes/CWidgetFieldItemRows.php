@@ -22,6 +22,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 		'label' => '',
 		'regex' => '',
 		'bold' => 0,
+		'dependent' => 0,
 		'default_color' => '',
 		'default_state' => self::STATE_STABLE,
 		'conditions' => []
@@ -46,6 +47,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 				'label' => ['type' => API_STRING_UTF8, 'length' => 255],
 				'regex' => ['type' => API_STRING_UTF8, 'length' => 500],
 				'bold' => ['type' => API_INT32, 'in' => '0,1'],
+				'dependent' => ['type' => API_INT32, 'in' => '0,1'],
 				'default_color' => ['type' => API_COLOR, 'flags' => API_ALLOW_NULL],
 				'default_state' => ['type' => API_INT32, 'in' => '0,1'],
 				'conditions' => ['type' => API_OBJECTS, 'fields' => [
@@ -107,6 +109,7 @@ class CWidgetFieldItemRows extends CWidgetField {
 				'label' => (string) ($row['label'] ?? ''),
 				'regex' => (string) ($row['regex'] ?? ''),
 				'bold' => (int) ($row['bold'] ?? 0),
+				'dependent' => (int) ($row['dependent'] ?? 0),
 				'default_color' => (string) ($row['default_color'] ?? ''),
 				'default_state' => (int) ($row['default_state'] ?? self::STATE_STABLE),
 				'conditions' => $conditions
@@ -163,6 +166,11 @@ class CWidgetFieldItemRows extends CWidgetField {
 				'type' => ZBX_WIDGET_FIELD_TYPE_INT32,
 				'name' => $this->name.'.'.$i.'.bold',
 				'value' => $row['bold']
+			];
+			$widget_fields[] = [
+				'type' => ZBX_WIDGET_FIELD_TYPE_INT32,
+				'name' => $this->name.'.'.$i.'.dependent',
+				'value' => $row['dependent']
 			];
 			$widget_fields[] = [
 				'type' => ZBX_WIDGET_FIELD_TYPE_STR,
