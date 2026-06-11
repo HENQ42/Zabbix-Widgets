@@ -14,7 +14,7 @@ $iframe_url = 'modules/metric_panel/panel.html?v='.$asset_version.'#'.rawurlenco
 $iframe = (new CTag('iframe', true, ''))
 	->setAttribute('src', $iframe_url)
 	->setAttribute('style', 'width: 100%; height: 100%; border: none; display: block;')
-	->setAttribute('sandbox', 'allow-scripts allow-same-origin');
+	->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-top-navigation-by-user-activation');
 
 $view->addItem(
 	(new CDiv($iframe))->addStyle('width:100%;height:100%;position:relative;')

@@ -7,6 +7,7 @@ use CControllerDashboardWidgetView;
 use CControllerResponseData;
 use CParser;
 use CRelativeTimeParser;
+use CUrl;
 use Modules\MetricPanel\Includes\WidgetForm;
 
 class WidgetView extends CControllerDashboardWidgetView {
@@ -60,6 +61,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 
 		$series = [];
+		$series_itemids = [];
 		$info = [];
 		$y_min = null;
 		$y_max = null;
@@ -126,8 +128,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 						'unit'    => $it['units'],
 						'current' => $current,
 						'points'  => $pts,
-						'is_main' => $is_main
+						'is_main' => $is_main,
+						'link'    => self::historyGraphUrl([$itemid])
 					];
+					$series_itemids[] = $itemid;
 				}
 
 				// Tipo 2: linha combinada "valor usado / valor total".
@@ -175,6 +179,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'is_integer'     => $all_integer,
 				'line_thickness' => $line_thickness,
 				'fill_intensity' => $fill_intensity,
+				'link'           => $series_itemids ? self::historyGraphUrl($series_itemids) : null,
 				'error'          => $error
 			],
 			'user' => ['debug_mode' => $this->getDebugMode()]
@@ -254,6 +259,18 @@ class WidgetView extends CControllerDashboardWidgetView {
 			? (float) $last[$itemid]['lastvalue']
 			: null;
 		return ['name' => $it['name'], 'unit' => $it['units'], 'current' => $current];
+	}
+
+	/**
+	 * URL relativa para a tela de historico/grafico dos itens (mesma usada
+	 * pelo widget nativo "Item value"). Relativa a raiz da UI — o front-end
+	 * resolve contra a pagina pai, sem acoplar dominio ou caminho da instancia.
+	 */
+	private static function historyGraphUrl(array $itemids): string {
+		return (new CUrl('history.php'))
+			->setArgument('action', 'showgraph')
+			->setArgument('itemids', array_values($itemids))
+			->getUrl();
 	}
 
 	private function isDarkTheme(): bool {
