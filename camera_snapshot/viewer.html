@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Camera Snapshot</title>
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #0e1012;
+		overflow: hidden;
+	}
+	#frame {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		display: none;
+	}
+	#status {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #768d99;
+		font: 13px/1.5 Arial, sans-serif;
+		text-align: center;
+		padding: 0 16px;
+		box-sizing: border-box;
+	}
+	#status.error { color: #e45959; }
+	#stamp {
+		position: absolute;
+		right: 6px;
+		bottom: 6px;
+		background: rgba(0,0,0,.55);
+		color: #cfd9dd;
+		font: 11px/1 Arial, sans-serif;
+		padding: 4px 7px;
+		border-radius: 3px;
+		display: none;
+	}
+</style>
+</head>
+<body>
+<img id="frame" alt="">
+<div id="status">Conectando&hellip;</div>
+<div id="stamp"></div>
+<script>
+(() => {
+	'use strict';
+
+	let cfg;
+	try {
+		cfg = JSON.parse(decodeURIComponent(window.location.hash.substring(1)));
+	}
+	catch (e) {
+		showError('Configuração inválida.');
+		return;
+	}
+
+	const base = (cfg.base || '').replace(/\/+$/, '');
+	const img = document.getElementById('frame');
+	const status = document.getElementById('status');
+	const stamp = document.getElementById('stamp');
+
+	if (!base) {
+		showError('URL base não informada.');
+		return;
+	}
+
+	// Token JWT expira em ~1h — reaproveita entre capturas (e entre widgets da
+	// mesma câmera) via sessionStorage; só renova quando a resposta não é JPEG.
+	const tokenKey = 'itscam_token:' + base;
+	let lastObjectUrl = null;
+
+	function showError(msg) {
+		status.textContent = msg;
+		status.classList.add('error');
+		status.style.display = 'flex';
+	}
+
+	async function login() {
+		const r = await fetch(base + '/api/auth', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({params: {username: cfg.user || 'admin', password: cfg.pass || ''}})
+		});
+		if (!r.ok) {
+			throw new Error('Autenticação falhou (HTTP ' + r.status + ').');
+		}
+		const token = (await r.json()).token;
+		if (!token) {
+			throw new Error('Resposta de autenticação sem token.');
+		}
+		sessionStorage.setItem(tokenKey, token);
+		return token;
+	}
+
+	async function fetchFrame(token) {
+		const r = await fetch(base + '/api/lastframe.cgi', {
+			headers: {Authorization: 'Bearer ' + token},
+			cache: 'no-store'
+		});
+		if (r.status === 401) {
+			return null; // token expirado
+		}
+		if (!r.ok) {
+			throw new Error('Falha ao buscar imagem (HTTP ' + r.status + ').');
+		}
+		const blob = await r.blob();
+		// Magic bytes JPEG (FF D8 FF) — distingue frame real do fallback HTML do SPA
+		const head = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
+		if (head[0] !== 0xFF || head[1] !== 0xD8 || head[2] !== 0xFF) {
+			return null; // não é JPEG → tratar como token inválido
+		}
+		return blob;
+	}
+
+	async function refresh() {
+		try {
+			let token = sessionStorage.getItem(tokenKey);
+			let blob = token ? await fetchFrame(token) : null;
+
+			if (blob === null) {
+				token = await login();
+				blob = await fetchFrame(token);
+			}
+			if (blob === null) {
+				throw new Error('Resposta não é JPEG mesmo após reautenticar.');
+			}
+
+			const url = URL.createObjectURL(blob);
+			img.onload = () => {
+				if (lastObjectUrl) {
+					URL.revokeObjectURL(lastObjectUrl);
+				}
+				lastObjectUrl = url;
+				img.style.display = 'block';
+				status.style.display = 'none';
+				stamp.style.display = 'block';
+				stamp.textContent = new Date().toLocaleTimeString();
+			};
+			img.src = url;
+		}
+		catch (e) {
+			// Mantém a última imagem visível se já houver uma; só mostra erro a frio
+			if (img.style.display !== 'block') {
+				showError(e.message || 'Erro ao buscar imagem.');
+			}
+			stamp.style.display = 'block';
+			stamp.textContent = '⚠ ' + new Date().toLocaleTimeString();
+		}
+	}
+
+	refresh();
+
+	const interval = parseInt(cfg.refresh, 10) || 0;
+	if (interval > 0) {
+		setInterval(refresh, interval * 1000);
+	}
+})();
+</script>
+</body>
+</html>

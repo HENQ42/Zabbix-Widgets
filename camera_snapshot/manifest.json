@@ -1,0 +1,20 @@
+{
+    "manifest_version": 2.0,
+    "id": "camera_snapshot",
+    "type": "widget",
+    "name": "Camera Snapshot",
+    "namespace": "CameraSnapshot",
+    "version": "1.0",
+    "description": "Exibe o ultimo frame de uma camera Pumatronix ITSCAM via API (auth JWT + lastframe.cgi). Configuracao por campos de texto: URL base, usuario e senha.",
+    "author": "Custom",
+    "actions": {
+        "widget.camera_snapshot.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Camera Snapshot",
+        "size": { "width": 12, "height": 6 }
+    }
+}
