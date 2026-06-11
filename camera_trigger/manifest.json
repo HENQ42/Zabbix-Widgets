@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "camera_trigger",
+    "type": "widget",
+    "name": "Camera Trigger",
+    "namespace": "CameraTrigger",
+    "version": "1.0",
+    "description": "Dispara uma captura na camera Pumatronix ITSCAM (auth JWT + trigger.cgi) e exibe a imagem com os metadados embutidos (NDataComp: placa, veiculo, horario, GPS...). Trata timeout quando nao passa veiculo.",
+    "author": "Custom",
+    "actions": {
+        "widget.camera_trigger.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        },
+        "widget.camera_trigger.image": {
+            "class": "ImageStore",
+            "layout": "layout.json"
+        }
+    },
+    "widget": {
+        "name": "Camera Trigger",
+        "size": { "width": 12, "height": 8 }
+    }
+}
