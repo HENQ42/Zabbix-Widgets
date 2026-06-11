@@ -145,7 +145,7 @@ $css = <<<CSS
 	padding: 0;
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: #fff;
+	background: var(--surface);
 	overflow: hidden;
 }
 .scard-wrap[data-theme="dark"] {
@@ -189,7 +189,7 @@ $css = <<<CSS
 .scard {
 	font-family: var(--font-ui);
 	color: var(--fg);
-	background: #fff;
+	background: var(--surface);
 	border: 0;
 	border-radius: 0;
 	box-shadow: none;

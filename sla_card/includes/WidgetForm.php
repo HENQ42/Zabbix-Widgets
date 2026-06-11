@@ -31,10 +31,12 @@ class WidgetForm extends CWidgetForm {
 					->setDefault('Mês atual')
 			)
 			->addField(
+				// "Automático" segue o tema do perfil do usuário (fallback: tema padrão da GUI).
 				(new CWidgetFieldRadioButtonList('theme', 'Tema', [
+					2 => 'Automático',
 					0 => 'Claro',
 					1 => 'Escuro'
-				]))->setDefault(0)
+				]))->setDefault(2)
 			)
 			->addField(
 				// Required for template dashboards — auto-injects the active host context.

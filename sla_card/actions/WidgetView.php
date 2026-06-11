@@ -4,7 +4,9 @@ namespace Modules\SlaCard\Actions;
 
 use API,
 	CControllerDashboardWidgetView,
-	CControllerResponseData;
+	CControllerResponseData,
+	CSettingsHelper,
+	CWebUser;
 
 class WidgetView extends CControllerDashboardWidgetView {
 
@@ -14,7 +16,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$slaid_raw = $this->fields_values['slaid'] ?? [];
 		$serviceid_raw = $this->fields_values['serviceid'] ?? [];
 		$period_label = (string) ($this->fields_values['period_label'] ?? 'Mês atual');
-		$theme = (int) ($this->fields_values['theme'] ?? 0);
+		$theme = self::resolveTheme((int) ($this->fields_values['theme'] ?? 2));
 
 		$override_hostids = $this->fields_values['override_hostid'] ?? [];
 
@@ -329,6 +331,25 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'error' => '',
 			'user' => ['debug_mode' => $this->getDebugMode()]
 		]));
+	}
+
+	/**
+	 * Resolve the widget theme mode (0 = light, 1 = dark, 2 = auto) to 0/1.
+	 * In auto mode, follows the user's profile theme; profiles set to
+	 * "System default" fall back to the GUI default theme.
+	 */
+	private static function resolveTheme(int $mode): int {
+		if ($mode !== 2) {
+			return $mode === 1 ? 1 : 0;
+		}
+
+		$user_theme = CWebUser::$data['theme'] ?? THEME_DEFAULT;
+
+		if ($user_theme === THEME_DEFAULT || $user_theme === '') {
+			$user_theme = CSettingsHelper::get(CSettingsHelper::DEFAULT_THEME);
+		}
+
+		return in_array($user_theme, ['dark-theme', 'hc-dark'], true) ? 1 : 0;
 	}
 
 	private static function classify(?float $pct, float $slo): string {
