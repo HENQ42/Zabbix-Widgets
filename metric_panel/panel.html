@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --text: #14354d; --label: #24465c; --value: #0d334c; --info: #51687a;
+    --sep: #dcdcdc;
+    --tip-bg: rgba(255,255,255,0.97); --tip-border: #ccc; --tip-text: #333; --tip-head: #555;
+    --msg: #888;
+  }
+  body.dark {
+    --text: #c7d4e0; --label: #93a7b8; --value: #e6eef5; --info: #93a7b8;
+    --sep: #2c3946;
+    --tip-bg: rgba(28,38,50,0.97); --tip-border: #3a4a5b; --tip-text: #cdd9e3; --tip-head: #9fb2c2;
+    --msg: #7e94a6;
+  }
+
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+    font-family: Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: transparent; }
+
+  #card { display: flex; flex-direction: column; width: 100%; height: 100%; box-sizing: border-box; }
+
+  #body { flex: 1 1 auto; display: flex; min-height: 0; padding: 12px 14px;
+    box-sizing: border-box; gap: 18px; }
+
+  #sidebar { flex: 0 0 clamp(110px, 34%, 280px); display: flex; flex-direction: column;
+    gap: 14px; overflow: auto; min-width: 0; }
+
+  .metric-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .metric-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .metric-color { width: 22px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+  .metric-label { font-size: 12px; color: var(--label); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .metric-value { font-size: 24px; line-height: 1.05; font-weight: 400; color: var(--value);
+    font-variant-numeric: tabular-nums; }
+
+  .metric-item.info .metric-value { font-size: 16px; color: var(--info); }
+  .info-sep { height: 1px; background: var(--sep); margin: 2px 0; }
+
+  #chart-area { flex: 1 1 auto; position: relative; min-width: 0; min-height: 0; box-sizing: border-box; }
+  #c { display: block; width: 100%; height: 100%; }
+
+  #tip { position: absolute; pointer-events: none; display: none;
+    background: var(--tip-bg); border: 1px solid var(--tip-border); border-radius: 3px;
+    padding: 5px 7px; font-size: 11px; box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    z-index: 2; min-width: 110px; color: var(--tip-text); }
+  #tip .t { font-weight: 600; margin-bottom: 3px; color: var(--tip-head); }
+  #tip .row { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+  #tip .sw { width: 10px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+  #tip .nm { color: var(--tip-text); flex: 1 1 auto; }
+  #tip .vl { font-variant-numeric: tabular-nums; color: var(--tip-text); font-weight: 500; }
+
+  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: var(--msg); font-size: 13px; text-align: center; padding: 0 10px; }
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="body">
+    <div id="sidebar"></div>
+    <div id="chart-area">
+      <canvas id="c"></canvas>
+      <div id="tip"></div>
+      <div id="msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const PAD = { top: 12, right: 14, bottom: 24, left: 48 };
+
+  const LIGHT = { grid: '#d2d2d2', gridX: '#e6e6e6', axis: '#aaa', tick: '#666', unit: '#888', dot: '#fff' };
+  const DARK  = { grid: '#33404f', gridX: '#2a3543', axis: '#4a5a6b', tick: '#8aa0b3', unit: '#7e94a6', dot: '#1c2632' };
+
+  const state = { data: null, geom: null, base: null, th: LIGHT };
+
+  function readData() {
+    try {
+      const h = window.location.hash.substring(1);
+      if (!h) return null;
+      return JSON.parse(decodeURIComponent(h));
+    } catch (e) { return null; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+
+  function fmtValue(v, isInt) {
+    if (v === null || v === undefined) return '–';
+    const a = Math.abs(v);
+    if (isInt && a < 1000) return String(Math.round(v));
+    if (a >= 1000000) return (v / 1000000).toFixed(2) + 'M';
+    if (a >= 1000) return (v / 1000).toFixed(2) + 'k';
+    if (a >= 100) return v.toFixed(1);
+    if (a >= 1) return v.toFixed(2);
+    if (a === 0) return '0';
+    if (a >= 0.01) return v.toFixed(3);
+    return v.toExponential(1);
+  }
+
+  function withUnit(v, unit, isInt) {
+    const s = fmtValue(v, isInt);
+    if (s === '–' || !unit) return s;
+    return s + ' ' + unit;
+  }
+
+  function fmtTime(ts, span) {
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    if (span < 86400) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    if (span <= 7 * 86400) {
+      return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
+  }
+
+  function fmtFull(ts) {
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' +
+      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function niceTicks(min, max, count) {
+    if (min === max) { min -= 1; max += 1; }
+    const range = max - min;
+    const rawStep = range / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let step;
+    if (norm < 1.5) step = mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
+    const niceMin = Math.floor(min / step) * step;
+    const niceMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let v = niceMin; v <= niceMax + step / 2; v += step) ticks.push(v);
+    return { min: niceMin, max: niceMax, ticks };
+  }
+
+  function hexToRgb(hex) {
+    const m = (hex || '#000000').replace('#', '');
+    const n = parseInt(m, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function findNearest(points, t) {
+    if (!points.length) return -1;
+    let lo = 0, hi = points.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (points[mid][0] < t) lo = mid + 1; else hi = mid;
+    }
+    if (lo > 0 && (t - points[lo - 1][0]) <= (points[lo][0] - t)) return lo - 1;
+    return lo;
+  }
+
+  function renderShell() {
+    const d = state.data || {};
+    const isInt = !!d.is_integer;
+    const sb = document.getElementById('sidebar');
+    let html = '';
+
+    (d.series || []).forEach(s => {
+      html += '<div class="metric-item">'
+        + '<div class="metric-row">'
+        + '<span class="metric-color" style="background:' + escapeHtml(s.color) + '"></span>'
+        + '<span class="metric-label">' + escapeHtml(s.name) + '</span>'
+        + '</div>'
+        + '<div class="metric-value">' + escapeHtml(withUnit(s.current, s.unit, isInt)) + '</div>'
+        + '</div>';
+    });
+
+    if (d.info && d.info.length) {
+      html += '<div class="info-sep"></div>';
+      d.info.forEach(s => {
+        let value;
+        if (s.kind === 'ratio') {
+          value = withUnit(s.used.current, s.used.unit, false) + ' / ' + withUnit(s.total.current, s.total.unit, false);
+        } else {
+          value = withUnit(s.current, s.unit, false);
+        }
+        const label = s.name
+          ? '<div class="metric-row"><span class="metric-label">' + escapeHtml(s.name) + '</span></div>'
+          : '';
+        html += '<div class="metric-item info">' + label
+          + '<div class="metric-value">' + escapeHtml(value) + '</div></div>';
+      });
+    }
+    sb.innerHTML = html;
+  }
+
+  function renderBase() {
+    const canvas = document.getElementById('c');
+    const msg = document.getElementById('msg');
+    const data = state.data;
+    const TH = state.th;
+
+    if (!data) { msg.style.display = 'block'; msg.textContent = 'No data'; return; }
+    if (data.error) { msg.style.display = 'block'; msg.textContent = data.error; return; }
+    const drawable = (data.series || []).filter(s => s.points && s.points.length);
+    if (!drawable.length) {
+      msg.style.display = 'block';
+      msg.textContent = 'Sem dados no período selecionado.';
+      return;
+    }
+    msg.style.display = 'none';
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const plotL = PAD.left, plotT = PAD.top;
+    const plotR = W - PAD.right, plotB = H - PAD.bottom;
+    const plotW = plotR - plotL, plotH = plotB - plotT;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const tf = data.time_from, tt = data.time_to, span = tt - tf;
+    const yInfo = niceTicks(
+      data.y_min !== null && data.y_min !== undefined ? data.y_min : 0,
+      data.y_max !== null && data.y_max !== undefined ? data.y_max : 1,
+      4
+    );
+
+    const xScale = (t) => plotL + ((t - tf) / Math.max(1, span)) * plotW;
+    const yScale = (v) => plotB - ((v - yInfo.min) / Math.max(1e-9, yInfo.max - yInfo.min)) * plotH;
+    state.geom = { plotL, plotR, plotT, plotB, tf, tt, span, xScale, yScale };
+
+    // Y grid pontilhada + labels.
+    ctx.font = '11px Roboto, Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 1;
+    for (const v of yInfo.ticks) {
+      const y = yScale(v);
+      ctx.strokeStyle = TH.grid;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(plotL, y); ctx.lineTo(plotR, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = TH.tick;
+      ctx.fillText(fmtValue(v, data.is_integer), plotL - 6, y);
+    }
+
+    if (data.unit) {
+      ctx.fillStyle = TH.unit;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.font = '10px Roboto, Helvetica, Arial, sans-serif';
+      ctx.fillText(data.unit, plotL + 4, plotT - 1);
+      ctx.font = '11px Roboto, Helvetica, Arial, sans-serif';
+    }
+
+    // X ticks.
+    const xTickCount = Math.max(2, Math.min(7, Math.floor(plotW / 80)));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let i = 0; i <= xTickCount; i++) {
+      const t = tf + (span * i) / xTickCount;
+      const x = xScale(t);
+      ctx.strokeStyle = TH.gridX;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x, plotT); ctx.lineTo(x, plotB); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = TH.tick;
+      ctx.fillText(fmtTime(t, span), x, plotB + 5);
+    }
+
+    // Eixos.
+    ctx.strokeStyle = TH.axis;
+    ctx.beginPath();
+    ctx.moveTo(plotL, plotT); ctx.lineTo(plotL, plotB); ctx.lineTo(plotR, plotB);
+    ctx.stroke();
+
+    const stroke = (data.line_thickness || 0) * 0.5 + 0.5;
+    const fillA = (data.fill_intensity || 0) * 0.06;
+
+    // Passe 1: todos os preenchimentos (para nao cobrir as linhas das demais series).
+    if (fillA > 0) {
+      for (const s of drawable) {
+        const rgb = hexToRgb(s.color);
+        ctx.beginPath();
+        ctx.moveTo(xScale(s.points[0][0]), plotB);
+        for (const p of s.points) ctx.lineTo(xScale(p[0]), yScale(p[1]));
+        ctx.lineTo(xScale(s.points[s.points.length - 1][0]), plotB);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillA + ')';
+        ctx.fill();
+      }
+    }
+
+    // Passe 2: todas as linhas por cima.
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const s of drawable) {
+      ctx.beginPath();
+      ctx.strokeStyle = s.color; ctx.lineWidth = stroke;
+      let started = false;
+      for (const p of s.points) {
+        const x = xScale(p[0]), y = yScale(p[1]);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    const off = document.createElement('canvas');
+    off.width = canvas.width; off.height = canvas.height;
+    off.getContext('2d').drawImage(canvas, 0, 0);
+    state.base = off;
+  }
+
+  function drawOverlay(mouseX) {
+    const canvas = document.getElementById('c');
+    if (!state.base || !state.geom) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(state.base, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (mouseX === null) { hideTip(); return; }
+
+    const g = state.geom;
+    const x = Math.max(g.plotL, Math.min(g.plotR, mouseX));
+    const tMouse = g.tf + ((x - g.plotL) / (g.plotR - g.plotL)) * g.span;
+
+    ctx.strokeStyle = 'rgba(128,128,128,0.55)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x, g.plotT); ctx.lineTo(x, g.plotB); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const rows = [];
+    for (const s of state.data.series) {
+      if (!s.points || !s.points.length) continue;
+      const i = findNearest(s.points, tMouse);
+      if (i < 0) continue;
+      const p = s.points[i];
+      const px = g.xScale(p[0]), py = g.yScale(p[1]);
+      ctx.beginPath();
+      ctx.fillStyle = s.color; ctx.strokeStyle = state.th.dot; ctx.lineWidth = 1.5;
+      ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      rows.push({ color: s.color, name: s.name, value: p[1], unit: s.unit || '', ts: p[0] });
+    }
+    showTip(mouseX, rows, tMouse);
+  }
+
+  function showTip(mouseX, rows, tMouse) {
+    const tip = document.getElementById('tip');
+    if (!rows.length) { tip.style.display = 'none'; return; }
+    const isInt = state.data && state.data.is_integer;
+    const header = '<div class="t">' + fmtFull(tMouse) + '</div>';
+    const body = rows.map(r =>
+      '<div class="row">'
+      + '<span class="sw" style="background:' + r.color + '"></span>'
+      + '<span class="nm">' + escapeHtml(r.name) + '</span>'
+      + '<span class="vl">' + escapeHtml(withUnit(r.value, r.unit, isInt)) + '</span>'
+      + '</div>'
+    ).join('');
+    tip.innerHTML = header + body;
+    tip.style.display = 'block';
+
+    const area = document.getElementById('chart-area');
+    const aw = area.clientWidth, tw = tip.offsetWidth;
+    let left = mouseX + 14;
+    if (left + tw > aw - 4) left = mouseX - tw - 14;
+    if (left < 4) left = 4;
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(4, state.geom.plotT + 2) + 'px';
+  }
+
+  function hideTip() { document.getElementById('tip').style.display = 'none'; }
+
+  let raf = null;
+  function scheduleRender() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => { renderBase(); drawOverlay(null); });
+  }
+
+  function init() {
+    state.data = readData();
+    const dark = !!(state.data && state.data.dark);
+    state.th = dark ? DARK : LIGHT;
+    if (dark) document.body.classList.add('dark');
+    renderShell();
+    scheduleRender();
+
+    const area = document.getElementById('chart-area');
+    area.addEventListener('mousemove', (e) => {
+      if (!state.geom) return;
+      const rect = area.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < state.geom.plotL || x > state.geom.plotR) { drawOverlay(null); return; }
+      drawOverlay(x);
+    });
+    area.addEventListener('mouseleave', () => drawOverlay(null));
+  }
+
+  window.addEventListener('resize', scheduleRender);
+  if (window.ResizeObserver) new ResizeObserver(scheduleRender).observe(document.body);
+  init();
+})();
+</script>
+</body>
+</html>
