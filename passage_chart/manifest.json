@@ -1,0 +1,20 @@
+{
+    "manifest_version": 2.0,
+    "id": "passage_chart",
+    "type": "widget",
+    "name": "Passage Chart",
+    "namespace": "PassageChart",
+    "version": "1.0",
+    "description": "Grafico de barras de passagens (deteccoes) por periodo: soma de itens contadores por intervalo (15m/1h/1d), total ou empilhado por camera.",
+    "author": "Custom",
+    "actions": {
+        "widget.passage_chart.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        }
+    },
+    "widget": {
+        "name": "Passage Chart",
+        "size": { "width": 24, "height": 8 }
+    }
+}

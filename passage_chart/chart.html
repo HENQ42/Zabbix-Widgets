@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+    font-family: Roboto, Helvetica, Arial, sans-serif; color: #333; }
+  #wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
+  #chart-area { flex: 1 1 auto; position: relative; min-height: 0; }
+  #c { display: block; width: 100%; height: 100%; }
+  #legend {
+    flex: 0 0 auto; height: 22px; line-height: 22px;
+    padding: 2px 8px; font-size: 11px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    border-top: 1px solid #eee; background: #fafafa;
+  }
+  #legend .item { display: inline-block; margin-right: 14px; }
+  #legend .sw {
+    display: inline-block; width: 12px; height: 8px; vertical-align: middle;
+    margin-right: 5px; border-radius: 2px;
+  }
+  #legend .tot { color: #777; font-variant-numeric: tabular-nums; }
+  #tip {
+    position: absolute; pointer-events: none; display: none;
+    background: rgba(255,255,255,0.97); border: 1px solid #ccc;
+    border-radius: 3px; padding: 5px 7px; font-size: 11px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12); z-index: 2; min-width: 130px;
+  }
+  #tip .t { font-weight: 600; margin-bottom: 3px; color: #555; }
+  #tip .row { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+  #tip .sw { width: 10px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+  #tip .nm { color: #333; flex: 1 1 auto; }
+  #tip .vl { font-variant-numeric: tabular-nums; color: #111; font-weight: 500; }
+  #tip .total-row { border-top: 1px solid #ddd; margin-top: 3px; padding-top: 2px; }
+  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #888; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="chart-area">
+    <canvas id="c"></canvas>
+    <div id="tip"></div>
+    <div id="msg" style="display:none"></div>
+  </div>
+  <div id="legend"></div>
+</div>
+<script>
+(function () {
+  const PAD = { top: 18, right: 16, bottom: 28, left: 52 };
+  const MAX_LEGEND = 12;
+
+  const state = { data: null, geom: null, base: null, hoverIdx: null };
+
+  function readData() {
+    try {
+      const h = window.location.hash.substring(1);
+      if (!h) return null;
+      return JSON.parse(decodeURIComponent(h));
+    } catch (e) { return null; }
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function fmtBucket(ts, interval) {
+    const d = new Date(ts * 1000);
+    if (interval >= 86400) return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function fmtBucketFull(ts, interval) {
+    const d = new Date(ts * 1000);
+    const day = pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear();
+    if (interval >= 86400) return day;
+    const e = new Date((ts + interval) * 1000);
+    return day + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes())
+      + ' – ' + pad2(e.getHours()) + ':' + pad2(e.getMinutes());
+  }
+
+  function fmtCount(v) {
+    if (v >= 1000000) return (v / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (v >= 10000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(v);
+  }
+
+  function niceTicks(max, count) {
+    if (max <= 0) max = 1;
+    const rawStep = max / count;
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let step;
+    if (norm < 1.5) step = mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
+    const niceMax = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let v = 0; v <= niceMax + step / 2; v += step) ticks.push(v);
+    return { max: niceMax, ticks };
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+
+  function stackedTotals(data) {
+    const n = data.buckets.length;
+    const tot = new Array(n).fill(0);
+    for (const s of data.series) {
+      for (let i = 0; i < n; i++) tot[i] += s.values[i] || 0;
+    }
+    return tot;
+  }
+
+  function buildLegend(data) {
+    const el = document.getElementById('legend');
+    if (!data || !data.series || !data.series.length) { el.innerHTML = ''; return; }
+    const shown = data.series.slice(0, MAX_LEGEND);
+    let html = shown.map(s =>
+      '<span class="item"><span class="sw" style="background:' + s.color + '"></span>'
+      + escapeHtml(s.name) + ' <span class="tot">(' + fmtCount(s.total) + ')</span></span>'
+    ).join('');
+    if (data.series.length > MAX_LEGEND) {
+      html += '<span class="item tot">+' + (data.series.length - MAX_LEGEND) + '…</span>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderBase() {
+    const canvas = document.getElementById('c');
+    const msg = document.getElementById('msg');
+    const data = state.data;
+
+    if (!data) { msg.style.display = 'block'; msg.textContent = 'No data'; return; }
+    if (data.error) { msg.style.display = 'block'; msg.textContent = data.error; return; }
+    if (!data.series || !data.series.length || !data.buckets.length) {
+      msg.style.display = 'block';
+      msg.textContent = 'No data in selected period.';
+      return;
+    }
+    msg.style.display = 'none';
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const plotL = PAD.left, plotT = PAD.top;
+    const plotR = W - PAD.right, plotB = H - PAD.bottom;
+    const plotW = plotR - plotL, plotH = plotB - plotT;
+    if (plotW <= 10 || plotH <= 10) return;
+
+    const n = data.buckets.length;
+    const totals = stackedTotals(data);
+    const yInfo = niceTicks(Math.max.apply(null, totals.concat([1])), 5);
+    const yScale = (v) => plotB - (v / yInfo.max) * plotH;
+
+    const slotW = plotW / n;
+    const barW = Math.max(1, slotW * 0.72);
+
+    state.geom = { plotL, plotR, plotT, plotB, slotW, barW, yScale, n, totals };
+
+    // Y grid + labels
+    ctx.strokeStyle = '#e4e4e4';
+    ctx.fillStyle = '#666';
+    ctx.font = '11px Roboto, Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 1;
+    for (const v of yInfo.ticks) {
+      const y = yScale(v);
+      ctx.beginPath();
+      ctx.moveTo(plotL, y); ctx.lineTo(plotR, y);
+      ctx.stroke();
+      ctx.fillText(fmtCount(v), plotL - 6, y);
+    }
+
+    // X labels: pula rotulos para nao sobrepor
+    const labelEvery = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / 64))));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#666';
+    for (let i = 0; i < n; i += labelEvery) {
+      const x = plotL + i * slotW + slotW / 2;
+      ctx.fillText(fmtBucket(data.buckets[i], data.interval), x, plotB + 6);
+    }
+
+    // Barras (empilhadas quando ha varias series)
+    for (let i = 0; i < n; i++) {
+      const x = plotL + i * slotW + (slotW - barW) / 2;
+      let acc = 0;
+      for (const s of data.series) {
+        const v = s.values[i] || 0;
+        if (v <= 0) continue;
+        const y0 = yScale(acc);
+        const y1 = yScale(acc + v);
+        ctx.fillStyle = s.color;
+        ctx.fillRect(x, y1, barW, Math.max(1, y0 - y1));
+        acc += v;
+      }
+    }
+
+    // Totais acima das barras
+    if (data.show_values && slotW >= 26) {
+      ctx.fillStyle = '#444';
+      ctx.font = '10px Roboto, Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      for (let i = 0; i < n; i++) {
+        if (totals[i] <= 0) continue;
+        const x = plotL + i * slotW + slotW / 2;
+        ctx.fillText(fmtCount(totals[i]), x, yScale(totals[i]) - 2);
+      }
+    }
+
+    // Frame
+    ctx.strokeStyle = '#bbb';
+    ctx.strokeRect(plotL, plotT, plotW, plotH);
+
+    const off = document.createElement('canvas');
+    off.width = canvas.width;
+    off.height = canvas.height;
+    off.getContext('2d').drawImage(canvas, 0, 0);
+    state.base = off;
+  }
+
+  function drawOverlay(idx) {
+    const canvas = document.getElementById('c');
+    if (!state.base || !state.geom) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(state.base, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (idx === null) { hideTip(); return; }
+
+    const g = state.geom;
+    const x = g.plotL + idx * g.slotW;
+    ctx.fillStyle = 'rgba(80,80,80,0.08)';
+    ctx.fillRect(x, g.plotT, g.slotW, g.plotB - g.plotT);
+
+    showTip(idx);
+  }
+
+  function showTip(idx) {
+    const tip = document.getElementById('tip');
+    const data = state.data;
+    const g = state.geom;
+
+    const rows = [];
+    for (const s of data.series) {
+      const v = s.values[idx] || 0;
+      if (v > 0) rows.push({ color: s.color, name: s.name, value: v });
+    }
+    rows.sort((a, b) => b.value - a.value);
+
+    let html = '<div class="t">' + fmtBucketFull(data.buckets[idx], data.interval) + '</div>';
+    if (!rows.length) {
+      html += '<div class="row"><span class="nm" style="color:#888">Sem passagens</span></div>';
+    }
+    else {
+      html += rows.slice(0, 15).map(r =>
+        '<div class="row"><span class="sw" style="background:' + r.color + '"></span>'
+        + '<span class="nm">' + escapeHtml(r.name) + '</span>'
+        + '<span class="vl">' + fmtCount(r.value) + '</span></div>'
+      ).join('');
+      if (rows.length > 15) {
+        html += '<div class="row"><span class="nm" style="color:#888">+' + (rows.length - 15) + '…</span></div>';
+      }
+      if (data.series.length > 1) {
+        html += '<div class="row total-row"><span class="nm"><b>Total</b></span>'
+          + '<span class="vl">' + fmtCount(g.totals[idx]) + '</span></div>';
+      }
+    }
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+
+    const area = document.getElementById('chart-area');
+    const aw = area.clientWidth, ah = area.clientHeight;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const mouseX = g.plotL + idx * g.slotW + g.slotW;
+    let left = mouseX + 10;
+    if (left + tw > aw - 4) left = g.plotL + idx * g.slotW - tw - 10;
+    let top = Math.min(ah - th - 6, Math.max(6, g.plotT + 4));
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
+  function hideTip() {
+    document.getElementById('tip').style.display = 'none';
+  }
+
+  let raf = null;
+  function scheduleRender() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      renderBase();
+      drawOverlay(null);
+    });
+  }
+
+  function init() {
+    state.data = readData();
+    buildLegend(state.data);
+    scheduleRender();
+
+    const area = document.getElementById('chart-area');
+    area.addEventListener('mousemove', (e) => {
+      if (!state.geom) return;
+      const rect = area.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < state.geom.plotL || x > state.geom.plotR) { drawOverlay(null); return; }
+      const idx = Math.min(state.geom.n - 1, Math.floor((x - state.geom.plotL) / state.geom.slotW));
+      drawOverlay(idx);
+    });
+    area.addEventListener('mouseleave', () => drawOverlay(null));
+  }
+
+  window.addEventListener('resize', scheduleRender);
+  if (window.ResizeObserver) {
+    new ResizeObserver(scheduleRender).observe(document.body);
+  }
+  init();
+})();
+</script>
+</body>
+</html>
