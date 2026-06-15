@@ -1,0 +1,28 @@
+{
+    "manifest_version": 2.0,
+    "id": "host_group_grid_auto",
+    "type": "widget",
+    "name": "Host Group Grid (Auto)",
+    "namespace": "HostGroupGridAuto",
+    "version": "1.0",
+    "description": "Exibe uma grade de cards por Site (PREFIX_NN). A partir de um único grupo pai, descobre os grupos filho (EMPRESA/CONTRATO/TIPO/MODELO), identifica os tipos de host dinamicamente e resolve o status online por uma key fixa (host.availability). Cada card mostra badges ativos/total por tipo e timeline 24h consolidada.",
+    "author": "Custom",
+    "assets": {
+        "js": ["class.widget.js"]
+    },
+    "actions": {
+        "widget.host_group_grid_auto.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        },
+        "widget.host_group_grid_auto.types.get": {
+            "class": "TypesGet",
+            "layout": "layout.json"
+        }
+    },
+    "widget": {
+        "name": "Host Group Grid (Auto)",
+        "js_class": "CWidgetHostGroupGridAuto",
+        "size": { "width": 24, "height": 10 }
+    }
+}
