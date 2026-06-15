@@ -5,6 +5,7 @@ namespace Modules\HostGroupGridAuto\Includes;
 use Zabbix\Widgets\{CWidgetField, CWidgetForm};
 use Zabbix\Widgets\Fields\CWidgetFieldMultiSelectGroup;
 use Modules\HostGroupGridAuto\Includes\CWidgetFieldItemRows;
+use Modules\HostGroupGridAuto\Includes\CWidgetFieldSiteTypeRows;
 
 class WidgetForm extends CWidgetForm {
 
@@ -22,6 +23,12 @@ class WidgetForm extends CWidgetForm {
 			)
 			->addField(
 				new CWidgetFieldItemRows('items', _('Itens (drill-down)'))
+			)
+			// Relação "tipo de site → sites" (no fim do formulário). Cópia de trabalho no widget_field;
+			// a persistência durável é feita pelas predefinições (PresetStore), salvas/carregadas neste
+			// grid via AJAX e atreladas a um grupo de usuários dono.
+			->addField(
+				new CWidgetFieldSiteTypeRows('site_types', _('Tipos de site (predefinições)'))
 			);
 	}
 }

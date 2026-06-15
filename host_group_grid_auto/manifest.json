@@ -18,6 +18,26 @@
         "widget.host_group_grid_auto.types.get": {
             "class": "TypesGet",
             "layout": "layout.json"
+        },
+        "widget.host_group_grid_auto.sites.get": {
+            "class": "SitesGet",
+            "layout": "layout.json"
+        },
+        "widget.host_group_grid_auto.presets.list": {
+            "class": "PresetsList",
+            "layout": "layout.json"
+        },
+        "widget.host_group_grid_auto.presets.save": {
+            "class": "PresetsSave",
+            "layout": "layout.json"
+        },
+        "widget.host_group_grid_auto.presets.load": {
+            "class": "PresetsLoad",
+            "layout": "layout.json"
+        },
+        "widget.host_group_grid_auto.presets.delete": {
+            "class": "PresetsDelete",
+            "layout": "layout.json"
         }
     },
     "widget": {
