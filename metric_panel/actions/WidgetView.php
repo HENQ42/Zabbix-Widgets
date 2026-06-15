@@ -34,6 +34,13 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$main_label  = trim((string) ($this->fields_values['main_label'] ?? ''));
 		$accent      = $this->sanitizeColor((string) ($this->fields_values['accent_color'] ?? '#1f7faa'), '#1f7faa');
 
+		// Conversao de unidades dos valores Used/Total (apenas tipo "Usage %").
+		$convert_units = (int) ($this->fields_values['convert_units'] ?? 0) === 1;
+		$used_from  = (int) ($this->fields_values['used_from'] ?? 0);
+		$used_to    = (int) ($this->fields_values['used_to'] ?? 0);
+		$total_from = (int) ($this->fields_values['total_from'] ?? 0);
+		$total_to   = (int) ($this->fields_values['total_to'] ?? 0);
+
 		$now = time();
 		$time_from = self::parseRelative((string) ($this->fields_values['time_from'] ?? 'now-1h'), $now - 3600, true);
 		$time_to   = self::parseRelative((string) ($this->fields_values['time_to'] ?? 'now'), $now, false);
@@ -141,8 +148,12 @@ class WidgetView extends CControllerDashboardWidgetView {
 					$info[] = [
 						'kind'  => 'ratio',
 						'name'  => $used['name'] !== '' ? $used['name'] : $total['name'],
-						'used'  => ['current' => $used['current'],  'unit' => $used['unit']],
-						'total' => ['current' => $total['current'], 'unit' => $total['unit']]
+						'used'  => [
+							'display' => self::formatScalar($used['current'], $used['unit'], $convert_units, $used_from, $used_to)
+						],
+						'total' => [
+							'display' => self::formatScalar($total['current'], $total['unit'], $convert_units, $total_from, $total_to)
+						]
 					];
 				}
 
@@ -248,6 +259,33 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$out[$id] = self::bucketize($pts, $bucket_seconds);
 		}
 		return $out;
+	}
+
+	/**
+	 * Formata um valor escalar Used/Total da lateral.
+	 *
+	 * - $convert = false: valor cru com ate 2 casas decimais (zeros a direita removidos),
+	 *   sem qualquer escala, mantendo a unidade original do item.
+	 * - $convert = true: converte de $from_exp para $to_exp na base 1024 e usa o rotulo
+	 *   binario de destino (B, KiB, MiB, ...).
+	 */
+	private static function formatScalar(?float $value, string $orig_unit, bool $convert, int $from_exp, int $to_exp): string {
+		if ($value === null) {
+			return '–';
+		}
+
+		if ($convert) {
+			$value *= pow(1024, $from_exp - $to_exp);
+			$unit = WidgetForm::BIN_UNITS[$to_exp] ?? $orig_unit;
+		}
+		else {
+			$unit = $orig_unit;
+		}
+
+		// Ate 2 casas decimais, sem escala; remove zeros e ponto sobrando.
+		$s = rtrim(rtrim(sprintf('%.2f', $value), '0'), '.');
+
+		return $unit !== '' ? $s.' '.$unit : $s;
 	}
 
 	private function infoEntry(?string $itemid, array $items, array $last): array {

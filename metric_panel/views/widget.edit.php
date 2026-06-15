@@ -25,6 +25,21 @@
 			->setPopupParameter('numeric', true)
 	)
 	->addField(
+		new CWidgetFieldCheckBoxView($data['fields']['convert_units'])
+	)
+	->addField(
+		new CWidgetFieldSelectView($data['fields']['used_from'])
+	)
+	->addField(
+		new CWidgetFieldSelectView($data['fields']['used_to'])
+	)
+	->addField(
+		new CWidgetFieldSelectView($data['fields']['total_from'])
+	)
+	->addField(
+		new CWidgetFieldSelectView($data['fields']['total_to'])
+	)
+	->addField(
 		(new CWidgetFieldMultiSelectItemView($data['fields']['core_items']))
 			->setPopupParameter('numeric', true)
 	)

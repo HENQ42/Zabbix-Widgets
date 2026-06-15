@@ -194,7 +194,10 @@
       d.info.forEach(s => {
         let value;
         if (s.kind === 'ratio') {
-          value = withUnit(s.used.current, s.used.unit, false) + ' / ' + withUnit(s.total.current, s.total.unit, false);
+          // Used/Total ja chegam formatados do servidor (conversao + casas decimais).
+          const u = (s.used && s.used.display != null) ? s.used.display : '–';
+          const t = (s.total && s.total.display != null) ? s.total.display : '–';
+          value = u + ' / ' + t;
         } else {
           value = withUnit(s.current, s.unit, false);
         }

@@ -4,7 +4,7 @@
     "type": "widget",
     "name": "Metric Panel",
     "namespace": "MetricPanel",
-    "version": "1.0",
+    "version": "1.1",
     "description": "Painel de metrica em formato de card (header + lateral de valores + grafico). Suporta tres tipos de amostra: item unico, percentual de uso (usado/total) e multi-percentual (nucleos/cores).",
     "author": "Custom",
     "actions": {
