@@ -11,7 +11,7 @@ $view = new CWidgetView($data);
 
 if (empty($data['sites'])) {
 	$view->addItem(
-		(new CTableInfo())->setNoDataMessage(_('Nenhum site detectado. Verifique os grupos configurados e o padrão de nomenclatura dos hosts (PREFIXO_NN...).'))
+		(new CTableInfo())->setNoDataMessage(_('Nenhum site detectado. Verifique os grupos configurados e o padrão de nomenclatura dos hosts (PREFIXO_SITE..., onde SITE é o numerador NN ou um texto).'))
 	);
 }
 else {
@@ -49,7 +49,25 @@ else {
 			--hggrid-drilldown-bg: #1f2328;
 			--hggrid-accent: #a094f0;
 		}
-		.hggrid-wrap { display: grid; gap: 12px; padding: 12px; height: 100%; overflow: auto; box-sizing: border-box; align-content: start; align-items: start; grid-auto-rows: max-content; }
+		.hggrid-scroll { height: 100%; overflow: auto; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; }
+		.hggrid-section { display: flex; flex-direction: column; gap: 10px; }
+		.hggrid-section-title {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+			font-size: 13px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.6px;
+			color: var(--hggrid-text);
+			padding-bottom: 6px;
+			border-bottom: 1px solid var(--hggrid-header-border);
+		}
+		.hggrid-section-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+		.hggrid-section-name { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.hggrid-section-count { font-weight: 600; opacity: 0.5; font-variant-numeric: tabular-nums; }
+		.hggrid-wrap { display: grid; gap: 12px; box-sizing: border-box; align-content: start; align-items: start; grid-auto-rows: max-content; }
 		.hggrid-box {
 			border: 1px solid var(--hggrid-box-border);
 			border-radius: 8px;
@@ -173,11 +191,9 @@ else {
 	// Auto-fit columns: every card keeps a fixed minimum width (so all 12 timeline cells and the type
 	// labels render in full, never clipped) and the grid packs in as many columns as the widget width
 	// allows, stretching them to share the leftover space.
-	$grid = (new CDiv())
-		->addClass('hggrid-wrap')
-		->addStyle('grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));');
-
-	foreach ($data['sites'] as $site) {
+	// Monta o card de um site (idêntico ao anterior). Encapsulado numa closure para que possamos roteá-lo
+	// para a seção do seu "tipo de site" — em vez de despejar tudo num único grid plano.
+	$build_card = static function (array $site) use ($color_stable, $color_critical, $color_warning): CDiv {
 		$state = (string) ($site['state'] ?? 'stable');
 
 		if ($state === 'critical') {
@@ -310,7 +326,76 @@ else {
 			}
 		}
 
-		$grid->addItem($box);
+		return $box;
+	};
+
+	// Agrupa os cards por "tipo de site", preservando a ordem global de criticidade já aplicada em
+	// $data['sites'] (crítico → instável → estável). Sites sem tipo vão para um balde solto.
+	$grid_columns = 'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));';
+	$site_types = $data['site_types'] ?? [];
+
+	// Duas seções FIXAS, fora dos tipos definidos pelo usuário:
+	//  - "Em Estado Crítico": sempre primeira. Precedência sobre tudo — um site crítico sai do seu tipo
+	//    (ou de "sem tipo") e sobe pra cá.
+	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo (e que não estão críticos).
+	$critical_def = ['name' => _('Em Estado Crítico'), 'color' => $color_critical];
+	$unidentified_def = ['name' => _('Sem Identificação'), 'color' => '6B7280'];
+
+	$critical = []; // cards de sites em estado crítico (qualquer tipo)
+	$buckets = [];  // índice do tipo => [cards]
+	$untyped = [];  // cards sem tipo (e não-críticos)
+	foreach ($data['sites'] as $site) {
+		$card = $build_card($site);
+
+		// Crítico tem precedência: ignora o tipo e vai para a seção do topo.
+		if ((string) ($site['state'] ?? '') === 'critical') {
+			$critical[] = $card;
+			continue;
+		}
+
+		$ti = $site['type_index'] ?? null;
+		if ($ti === null || !isset($site_types[$ti])) {
+			$untyped[] = $card;
+		}
+		else {
+			$buckets[$ti][] = $card;
+		}
+	}
+
+	$grid = (new CDiv())->addClass('hggrid-scroll');
+
+	// Monta uma seção titulada (bolinha com a cor + nome + contagem) com os cards num grid auto-fit.
+	$build_section = static function (array $type_def, array $cards) use ($grid_columns): CDiv {
+		$title_items = [];
+		if (($type_def['color'] ?? '') !== '') {
+			$title_items[] = (new CDiv())
+				->addClass('hggrid-section-dot')
+				->addStyle('background-color: #'.$type_def['color'].';');
+		}
+		$title_items[] = (new CSpan($type_def['name']))->addClass('hggrid-section-name');
+		$title_items[] = (new CSpan('('.count($cards).')'))->addClass('hggrid-section-count');
+
+		return (new CDiv([
+			(new CDiv($title_items))->addClass('hggrid-section-title'),
+			(new CDiv($cards))->addClass('hggrid-wrap')->addStyle($grid_columns)
+		]))->addClass('hggrid-section');
+	};
+
+	// 1) Seção fixa "Em Estado Crítico" (topo): SEMPRE presente — quando não há nenhum crítico, aparece
+	// mesmo assim com contagem (0).
+	$grid->addItem($build_section($critical_def, $critical));
+
+	// 2) Tipos definidos pelo usuário, na ordem das configurações; pula tipos sem nenhum site visível.
+	foreach ($site_types as $idx => $type_def) {
+		if (empty($buckets[$idx])) {
+			continue;
+		}
+		$grid->addItem($build_section($type_def, $buckets[$idx]));
+	}
+
+	// 3) Seção fixa "Sem Identificação" (fim), se houver sites sem tipo.
+	if ($untyped) {
+		$grid->addItem($build_section($unidentified_def, $untyped));
 	}
 
 	// Per-site detail (consumed by class.widget.js for the drill-down screen).

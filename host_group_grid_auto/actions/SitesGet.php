@@ -7,19 +7,21 @@ use API,
 	CControllerResponseData;
 
 /**
- * AJAX helper do editor: dado o(s) grupo(s) de hosts pai, descobre os SITES existentes (PREFIX_NN) entre
- * os hosts monitorados sob a hierarquia e devolve a lista distinta. O grid de "tipos de site" usa essa
- * lista para oferecer um select por linha — em vez de digitar números à mão — desabilitando os sites já
+ * AJAX helper do editor: dado o(s) grupo(s) de hosts pai, descobre os SITES existentes (PREFIX_<SITE>)
+ * entre os hosts monitorados sob a hierarquia e devolve a lista distinta. O grid de "tipos de site" usa
+ * essa lista para oferecer um select por linha — em vez de digitar à mão — desabilitando os sites já
  * atrelados a outro tipo.
  *
- * Espelha a extração de site do WidgetView (mesma SITE_REGEX); mantido autocontido para o formulário não
- * depender do controller da view.
+ * Espelha a extração de site do WidgetView (mesma regra numérica + texto via prefixo aprendido); mantido
+ * autocontido para o formulário não depender do controller da view.
  */
 class SitesGet extends CController {
 
-	// Mesma regra do WidgetView::SITE_REGEX: captura o prefixo (tudo antes do número) e o número de 2
-	// dígitos do site. O site_id devolvido é o composto `prefix_site` (ex.: SEFAZ_AL_03).
-	private const SITE_REGEX = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
+	// Mesma regra do WidgetView::SITE_REGEX_NUM: captura o prefixo (tudo antes do número) e o numerador
+	// <NN> do site. O numerador é uma âncora inequívoca; sites em TEXTO (ex.: SEFAZ_AL_CENTRO) não têm
+	// âncora e são resolvidos pelo prefixo aprendido dos sites numéricos. O site_id devolvido é o
+	// composto `prefix_site` (ex.: SEFAZ_AL_03, SEFAZ_AL_CENTRO).
+	private const SITE_REGEX_NUM = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
 
 	protected function init(): void {
 		$this->disableCsrfValidation();
@@ -80,17 +82,29 @@ class SitesGet extends CController {
 						'monitored_hosts' => true
 					]);
 
-					// Dedupe por site_id (composto prefix_site), guardando o número para exibição/valor.
+					// Aprende os prefixos a partir dos sites numéricos (âncora inequívoca) para depois
+					// localizar os sites em texto. Mais longos primeiro, para casar o mais específico.
+					$known_prefixes = [];
+					foreach ($hosts as $host) {
+						if (preg_match(self::SITE_REGEX_NUM, (string) $host['host'], $m)) {
+							$known_prefixes[$m['prefix']] = true;
+						}
+					}
+					$known_prefixes = array_keys($known_prefixes);
+					usort($known_prefixes, static fn($a, $b) => strlen($b) <=> strlen($a));
+
+					// Dedupe por site_id (composto prefix_site), guardando o identificador para exibição/valor.
 					$seen = [];
 					foreach ($hosts as $host) {
-						if (preg_match(self::SITE_REGEX, (string) $host['host'], $m)) {
-							$site_id = $m['prefix'].'_'.$m['site'];
-							$seen[$site_id] = $m['site'];
+						$parsed = $this->extractSite((string) $host['host'], $known_prefixes);
+						if ($parsed !== null) {
+							[$site_id, $token] = $parsed;
+							$seen[$site_id] = $token;
 						}
 					}
 
-					foreach ($seen as $site_id => $number) {
-						$sites[] = ['number' => $number, 'site_id' => $site_id];
+					foreach ($seen as $site_id => $token) {
+						$sites[] = ['number' => $token, 'site_id' => $site_id];
 					}
 
 					usort($sites, static function ($a, $b) {
@@ -104,5 +118,32 @@ class SitesGet extends CController {
 		$this->setResponse(new CControllerResponseData(['main_block' => json_encode([
 			'sites' => $sites
 		], JSON_THROW_ON_ERROR)]));
+	}
+
+	/**
+	 * Extrai o site de um nome técnico, devolvendo [site_id, token] ou null. Espelha
+	 * WidgetView::extractSite(): site numérico via âncora <NN>; site em texto via prefixo conhecido.
+	 *
+	 * @param string[] $known_prefixes prefixos do mais longo para o mais curto
+	 * @return array{0: string, 1: string}|null
+	 */
+	private function extractSite(string $host_technical_name, array $known_prefixes): ?array {
+		if (preg_match(self::SITE_REGEX_NUM, $host_technical_name, $m)) {
+			return [$m['prefix'].'_'.$m['site'], $m['site']];
+		}
+
+		foreach ($known_prefixes as $prefix) {
+			$needle = $prefix.'_';
+			if (strncmp($host_technical_name, $needle, strlen($needle)) !== 0) {
+				continue;
+			}
+			$rest = substr($host_technical_name, strlen($needle));
+			$token = explode('_', $rest, 2)[0];
+			if ($token !== '') {
+				return [$prefix.'_'.$token, $token];
+			}
+		}
+
+		return null;
 	}
 }

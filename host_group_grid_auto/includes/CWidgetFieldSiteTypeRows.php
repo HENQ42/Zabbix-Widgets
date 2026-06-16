@@ -6,7 +6,8 @@ use Zabbix\Widgets\CWidgetField;
 
 /**
  * Campo do editor: a relação "tipo de site → sites". Cada linha é um tipo de site definido pelo usuário
- * (ex.: "Pórtico", "Posto fiscal") com uma cor e a lista dos números de site atrelados (ex.: "03, 07, 11").
+ * (ex.: "Pórtico", "Posto fiscal") com uma cor e a lista dos identificadores de site atrelados — numerador
+ * NN ou texto (ex.: "03, 07, CENTRO").
  *
  * Esta é a CÓPIA DE TRABALHO: vive no widget_field e some quando o widget é apagado. A persistência de
  * longo prazo é feita pelas predefinições (PresetStore), salvas/carregadas a partir deste grid via AJAX.
@@ -30,8 +31,8 @@ class CWidgetFieldSiteTypeRows extends CWidgetField {
 			->setValidationRules(['type' => API_OBJECTS, 'fields' => [
 				'name' => ['type' => API_STRING_UTF8, 'length' => 255],
 				'color' => ['type' => API_COLOR, 'flags' => API_ALLOW_NULL],
-				// Lista de números de site separados por vírgula/espaço (ex.: "03, 07, 11"). Mantida como
-				// texto cru no widget_field; a normalização para array acontece ao montar a predefinição.
+				// Lista de identificadores de site separados por vírgula/espaço (ex.: "03, 07, CENTRO").
+				// Mantida como texto cru no widget_field; a normalização para array acontece ao montar a predefinição.
 				'sites' => ['type' => API_STRING_UTF8, 'length' => 2048]
 			]]);
 	}

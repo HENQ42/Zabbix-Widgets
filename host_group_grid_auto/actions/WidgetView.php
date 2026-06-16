@@ -14,7 +14,11 @@ class WidgetView extends CControllerDashboardWidgetView {
 	// `SEFAZ_AL_03_MIKROTIK` -> prefix=`SEFAZ_AL`, site=`03`. The site key returned to callers is
 	// the composite `prefix_site` (e.g. `SEFAZ_AL_03`), so multiple prefixes can coexist without
 	// colliding on the numeric portion alone.
-	private const SITE_REGEX = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
+	//
+	// O numerador `<NN>` é uma âncora inequívoca para separar prefixo do site. A nomenclatura passou a
+	// aceitar TEXTO no lugar do número (ex.: `SEFAZ_AL_CENTRO`), caso em que não há âncora numérica —
+	// esses sites são resolvidos em extractSite() usando os prefixos aprendidos dos sites numéricos.
+	private const SITE_REGEX_NUM = '/^(?P<prefix>.+?)_(?P<site>\d{2})(?:_.*)?$/';
 
 	// Fixed item key carrying each host's "online" state (1 = online, 0 = offline). Standardised across
 	// every template as a dependent item that mirrors the template's own availability item, so the
@@ -82,15 +86,23 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
-		// Group hosts per site number using the canonical nomenclature regex.
+		// Aprende os prefixos da nomenclatura a partir dos hosts com site NUMÉRICO (o numerador <NN> é
+		// uma âncora inequívoca para separar prefixo do site). Esses prefixos permitem, em seguida,
+		// localizar o site quando ele é TEXTO (ex.: SEFAZ_AL_CENTRO), caso em que não há âncora numérica.
+		$known_prefixes = $this->learnPrefixes($hosts);
+
+		// Group hosts per site (numeric or text) using the canonical nomenclature.
 		$sites = []; // site_id => ['hosts' => [hostid => host]]
+		$site_token_of = []; // site_id => token do site (parte após o prefixo, ex.: "03" ou "CENTRO")
 
 		foreach ($hosts as $hid => $host) {
-			$site = $this->extractSite($host['host']);
-			if ($site === null) {
+			$parsed = $this->extractSite($host['host'], $known_prefixes);
+			if ($parsed === null) {
 				continue;
 			}
-			$sites[$site]['hosts'][(string) $hid] = $host;
+			[$site_id, $site_token] = $parsed;
+			$sites[$site_id]['hosts'][(string) $hid] = $host;
+			$site_token_of[$site_id] = $site_token;
 		}
 
 		if (!$sites) {
@@ -418,6 +430,30 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
+		// Relação "tipo de site → sites" (cópia de trabalho do editor / predefinição carregada). Cada tipo
+		// guarda os identificadores de site que lhe pertencem. Como o prefixo da nomenclatura é fixo
+		// (SEFAZ_AL...), o identificador (numerador <NN> OU texto, ex.: CENTRO) identifica o site de forma
+		// única, então casamos site→tipo por esse identificador (normalizado). A view agrupa os cards em
+		// seções tituladas seguindo ESTA ordem; sites sem tipo ficam soltos.
+		$site_type_rows = $this->fields_values['site_types'] ?? [];
+		$site_types = [];     // ordenado: índice => ['name','color']
+		$token_to_type = [];  // identificador normalizado ("03" ou "CENTRO") => índice do tipo (1º vence)
+		foreach ($site_type_rows as $row) {
+			$type_name = trim((string) ($row['name'] ?? ''));
+			if ($type_name === '') {
+				continue;
+			}
+			$idx = count($site_types);
+			$site_types[$idx] = ['name' => $type_name, 'color' => (string) ($row['color'] ?? '')];
+
+			foreach (preg_split('/[\s,]+/', (string) ($row['sites'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) as $tok) {
+				$key = $this->normalizeSiteToken($tok);
+				if ($key !== '' && !isset($token_to_type[$key])) {
+					$token_to_type[$key] = $idx;
+				}
+			}
+		}
+
 		// Build output per site.
 		$output_sites = [];
 
@@ -703,6 +739,10 @@ class WidgetView extends CControllerDashboardWidgetView {
 				return strnatcasecmp($a['name'], $b['name']);
 			});
 
+			// Identificador do site (numerador <NN> ou texto) — parte após o prefixo, casada com os
+			// identificadores configurados nos tipos de site (ambos normalizados da mesma forma).
+			$site_token = $site_token_of[$site_id] ?? '';
+
 			$output_sites[] = [
 				'site_id' => $site_id,
 				'site_label' => $site_id,
@@ -712,7 +752,9 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'state' => $state,
 				'state_rank' => $state_rank,
 				'timeline' => $timeline,
-				'hosts' => $hosts_detail
+				'hosts' => $hosts_detail,
+				// Índice do "tipo de site" dono deste identificador (null = sem tipo, renderiza solto na view).
+				'type_index' => $token_to_type[$this->normalizeSiteToken($site_token)] ?? null
 			];
 		}
 
@@ -727,6 +769,7 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$this->setResponse(new CControllerResponseData([
 			'name' => $name,
 			'sites' => $output_sites,
+			'site_types' => $site_types,
 			'color_stable' => $color_stable,
 			'color_critical' => $color_critical,
 			'color_warning' => $color_warning,
@@ -781,11 +824,80 @@ class WidgetView extends CControllerDashboardWidgetView {
 		return $group_tipo;
 	}
 
-	private function extractSite(string $host_technical_name): ?string {
-		if (preg_match(self::SITE_REGEX, $host_technical_name, $m)) {
-			return $m['prefix'].'_'.$m['site'];
+	/**
+	 * Aprende os prefixos de nomenclatura a partir dos hosts com site NUMÉRICO. O numerador <NN> é uma
+	 * âncora inequívoca para separar prefixo do site (os segmentos do prefixo não são numéricos), então
+	 * esses prefixos podem depois localizar o site quando ele é texto (sem âncora). Devolve os prefixos do
+	 * mais longo para o mais curto, para casar sempre o mais específico.
+	 *
+	 * @param array<int|string, array{host: string}> $hosts
+	 * @return string[]
+	 */
+	private function learnPrefixes(array $hosts): array {
+		$prefixes = [];
+		foreach ($hosts as $host) {
+			if (preg_match(self::SITE_REGEX_NUM, (string) $host['host'], $m)) {
+				$prefixes[$m['prefix']] = true;
+			}
 		}
+		$prefixes = array_keys($prefixes);
+		usort($prefixes, static fn($a, $b) => strlen($b) <=> strlen($a));
+
+		return $prefixes;
+	}
+
+	/**
+	 * Extrai o site de um nome técnico, devolvendo [site_id, token] ou null se não casar.
+	 *
+	 *  - site_id: composto `prefix_site` (ex.: SEFAZ_AL_03, SEFAZ_AL_CENTRO), chave de agrupamento.
+	 *  - token:   apenas o identificador do site (ex.: "03", "CENTRO"), usado no casamento com os tipos.
+	 *
+	 * Site numérico (<NN>) usa a âncora do numerador (comportamento histórico). Site em texto não tem
+	 * âncora, então localiza-o como o segmento imediatamente após um prefixo conhecido (aprendido dos
+	 * sites numéricos via learnPrefixes()).
+	 *
+	 * @param string[] $known_prefixes prefixos do mais longo para o mais curto
+	 * @return array{0: string, 1: string}|null
+	 */
+	private function extractSite(string $host_technical_name, array $known_prefixes): ?array {
+		// 1) Site numérico (<NN>): âncora inequívoca, comportamento histórico.
+		if (preg_match(self::SITE_REGEX_NUM, $host_technical_name, $m)) {
+			return [$m['prefix'].'_'.$m['site'], $m['site']];
+		}
+
+		// 2) Site em TEXTO (ex.: SEFAZ_AL_CENTRO[_TIPO...]): sem âncora numérica, o site é o segmento
+		//    logo após um prefixo conhecido. O identificador pode conter '-' interno (ex.: BR-101),
+		//    então vai apenas até o próximo '_'.
+		foreach ($known_prefixes as $prefix) {
+			$needle = $prefix.'_';
+			if (strncmp($host_technical_name, $needle, strlen($needle)) !== 0) {
+				continue;
+			}
+			$rest = substr($host_technical_name, strlen($needle));
+			$token = explode('_', $rest, 2)[0];
+			if ($token !== '') {
+				return [$prefix.'_'.$token, $token];
+			}
+		}
+
 		return null;
+	}
+
+	/**
+	 * Normaliza um identificador de site para casamento estável entre o que é digitado/salvo nos tipos de
+	 * site e o token extraído do nome do host. Numérico vira 2 dígitos com zero à esquerda ("3" -> "03");
+	 * texto é comparado sem distinção de maiúsculas/minúsculas.
+	 */
+	private function normalizeSiteToken(string $token): string {
+		$token = trim($token);
+		if ($token === '') {
+			return '';
+		}
+		if (ctype_digit($token)) {
+			return str_pad($token, 2, '0', STR_PAD_LEFT);
+		}
+
+		return strtoupper($token);
 	}
 
 	/**
