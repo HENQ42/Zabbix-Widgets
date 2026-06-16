@@ -223,12 +223,26 @@ else {
 		return sprintf('%02X%02X%02X', $r, $g, $b);
 	};
 
+	// Escurece uma cor hex em direção ao preto (amount entre 0 e 1). Usado no texto da badge de origem,
+	// para um contraste mais forte sobre o fundo claro.
+	$darken = static function (string $hex, float $amount): string {
+		$hex = ltrim($hex, '#');
+		if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
+			return $hex;
+		}
+		$r = (int) round(hexdec(substr($hex, 0, 2)) * (1 - $amount));
+		$g = (int) round(hexdec(substr($hex, 2, 2)) * (1 - $amount));
+		$b = (int) round(hexdec(substr($hex, 4, 2)) * (1 - $amount));
+
+		return sprintf('%02X%02X%02X', $r, $g, $b);
+	};
+
 	// Auto-fit columns: every card keeps a fixed minimum width (so all 12 timeline cells and the type
 	// labels render in full, never clipped) and the grid packs in as many columns as the widget width
 	// allows, stretching them to share the leftover space.
 	// Monta o card de um site (idêntico ao anterior). Encapsulado numa closure para que possamos roteá-lo
 	// para a seção do seu "tipo de site" — em vez de despejar tudo num único grid plano.
-	$build_card = static function (array $site) use ($color_stable, $color_critical, $color_warning, $site_types, $lighten): CDiv {
+	$build_card = static function (array $site) use ($color_stable, $color_critical, $color_warning, $site_types, $lighten, $darken): CDiv {
 		$state = (string) ($site['state'] ?? 'stable');
 
 		if ($state === 'critical') {
@@ -277,10 +291,11 @@ else {
 				$origin = $site_types[$origin_index];
 				$origin_color = ($origin['color'] ?? '') !== '' ? $origin['color'] : '6B7280';
 				$origin_bg = $lighten($origin_color, 0.75);
+				$origin_text = $darken($origin_color, 0.35);
 
 				$header_items[] = (new CSpan($origin['name']))
 					->addClass('hggrid-origin-badge')
-					->addStyle('background-color: #'.$origin_bg.'; color: #'.$origin_color.';')
+					->addStyle('background-color: #'.$origin_bg.'; color: #'.$origin_text.';')
 					->setAttribute('title', _('Origem').': '.$origin['name']);
 			}
 		}
