@@ -206,8 +206,8 @@ else {
 
 	$site_types = $data['site_types'] ?? [];
 
-	// Clareia uma cor hex em direção ao branco (amount entre 0 e 1). Usado na badge de origem: o texto é a
-	// mesma cor do tipo, porém num tom mais claro, sobre o fundo na cor cheia do tipo.
+	// Clareia uma cor hex em direção ao branco (amount entre 0 e 1). Usado na badge de origem: o fundo é um
+	// tom mais claro da cor do tipo e o texto fica na cor cheia do tipo (contraste legível).
 	$lighten = static function (string $hex, float $amount): string {
 		$hex = ltrim($hex, '#');
 		if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
@@ -268,19 +268,19 @@ else {
 
 		// Sites críticos saem do seu "tipo de site" e sobem para a seção fixa "Em Estado Crítico". Para não
 		// perder de vista de onde o site veio, exibimos aqui — à esquerda da badge de status — uma badge com
-		// o nome do tipo de origem, pintada com a cor salva daquele tipo (fundo cheio + texto num tom mais
-		// claro da mesma cor). Sites sem tipo de origem (vinham de "Sem Identificação", sem cor salva) ficam
+		// o nome do tipo de origem, pintada com a cor salva daquele tipo (fundo num tom claro + texto na cor
+		// cheia da mesma). Sites sem tipo de origem (vinham de "Sem Identificação", sem cor salva) ficam
 		// sem essa badge.
 		if ($state === 'critical') {
 			$origin_index = $site['type_index'] ?? null;
 			if ($origin_index !== null && isset($site_types[$origin_index])) {
 				$origin = $site_types[$origin_index];
 				$origin_color = ($origin['color'] ?? '') !== '' ? $origin['color'] : '6B7280';
-				$origin_text = $lighten($origin_color, 0.6);
+				$origin_bg = $lighten($origin_color, 0.75);
 
 				$header_items[] = (new CSpan($origin['name']))
 					->addClass('hggrid-origin-badge')
-					->addStyle('background-color: #'.$origin_color.'; color: #'.$origin_text.';')
+					->addStyle('background-color: #'.$origin_bg.'; color: #'.$origin_color.';')
 					->setAttribute('title', _('Origem').': '.$origin['name']);
 			}
 		}
