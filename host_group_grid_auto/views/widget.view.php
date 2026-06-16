@@ -125,6 +125,22 @@ else {
 		.hggrid-status.critical .hggrid-status-dot {
 			animation: pulse-dot 1.4s ease-out infinite;
 		}
+		.hggrid-origin-badge {
+			flex-shrink: 0;
+			display: inline-flex;
+			align-items: center;
+			max-width: 150px;
+			padding: 2px 8px;
+			border-radius: 999px;
+			font-size: 9px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			line-height: 1.4;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
 		@keyframes pulse-dot {
 			0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
 			70% { box-shadow: 0 0 0 6px transparent; opacity: 0.6; }
@@ -188,12 +204,31 @@ else {
 		.hggrid-online.bad { background: #9e9e9e; box-shadow: 0 0 0 2px rgba(158,158,158,0.18); }
 	CSS;
 
+	$site_types = $data['site_types'] ?? [];
+
+	// Clareia uma cor hex em direção ao branco (amount entre 0 e 1). Usado na badge de origem: o texto é a
+	// mesma cor do tipo, porém num tom mais claro, sobre o fundo na cor cheia do tipo.
+	$lighten = static function (string $hex, float $amount): string {
+		$hex = ltrim($hex, '#');
+		if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
+			return $hex;
+		}
+		$r = hexdec(substr($hex, 0, 2));
+		$g = hexdec(substr($hex, 2, 2));
+		$b = hexdec(substr($hex, 4, 2));
+		$r = (int) round($r + (255 - $r) * $amount);
+		$g = (int) round($g + (255 - $g) * $amount);
+		$b = (int) round($b + (255 - $b) * $amount);
+
+		return sprintf('%02X%02X%02X', $r, $g, $b);
+	};
+
 	// Auto-fit columns: every card keeps a fixed minimum width (so all 12 timeline cells and the type
 	// labels render in full, never clipped) and the grid packs in as many columns as the widget width
 	// allows, stretching them to share the leftover space.
 	// Monta o card de um site (idêntico ao anterior). Encapsulado numa closure para que possamos roteá-lo
 	// para a seção do seu "tipo de site" — em vez de despejar tudo num único grid plano.
-	$build_card = static function (array $site) use ($color_stable, $color_critical, $color_warning): CDiv {
+	$build_card = static function (array $site) use ($color_stable, $color_critical, $color_warning, $site_types, $lighten): CDiv {
 		$state = (string) ($site['state'] ?? 'stable');
 
 		if ($state === 'critical') {
@@ -229,7 +264,30 @@ else {
 			->addClass($state)
 			->addStyle('background-color: #'.$status_bg.'; color: #'.$stripe_color.';');
 
-		$box->addItem((new CDiv([$site_num, $status_badge]))->addClass('hggrid-header'));
+		$header_items = [$site_num];
+
+		// Sites críticos saem do seu "tipo de site" e sobem para a seção fixa "Em Estado Crítico". Para não
+		// perder de vista de onde o site veio, exibimos aqui — à esquerda da badge de status — uma badge com
+		// o nome do tipo de origem, pintada com a cor salva daquele tipo (fundo cheio + texto num tom mais
+		// claro da mesma cor). Sites sem tipo de origem (vinham de "Sem Identificação", sem cor salva) ficam
+		// sem essa badge.
+		if ($state === 'critical') {
+			$origin_index = $site['type_index'] ?? null;
+			if ($origin_index !== null && isset($site_types[$origin_index])) {
+				$origin = $site_types[$origin_index];
+				$origin_color = ($origin['color'] ?? '') !== '' ? $origin['color'] : '6B7280';
+				$origin_text = $lighten($origin_color, 0.6);
+
+				$header_items[] = (new CSpan($origin['name']))
+					->addClass('hggrid-origin-badge')
+					->addStyle('background-color: #'.$origin_color.'; color: #'.$origin_text.';')
+					->setAttribute('title', _('Origem').': '.$origin['name']);
+			}
+		}
+
+		$header_items[] = $status_badge;
+
+		$box->addItem((new CDiv($header_items))->addClass('hggrid-header'));
 
 		// Badges row: one badge per TIPO (derived from the nomenclature), formatted "<TIPO> ativo/total".
 		// No border — only the text colour reflects health: all active => stable, none => critical,
@@ -332,7 +390,6 @@ else {
 	// Agrupa os cards por "tipo de site", preservando a ordem global de criticidade já aplicada em
 	// $data['sites'] (crítico → instável → estável). Sites sem tipo vão para um balde solto.
 	$grid_columns = 'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));';
-	$site_types = $data['site_types'] ?? [];
 
 	// Duas seções FIXAS, fora dos tipos definidos pelo usuário:
 	//  - "Em Estado Crítico": sempre primeira. Precedência sobre tudo — um site crítico sai do seu tipo
