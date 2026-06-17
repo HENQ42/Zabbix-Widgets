@@ -127,9 +127,43 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 
 		if ($groupids) {
+			// Support nested host groups: selecting a parent group such as
+			// "TESTEA" must also include hosts from its children ("TESTEA/...").
+			// We keep the originally selected groups and additionally resolve any
+			// group whose name starts with "<selected name>/".
+			$all_groupids = [];
+
+			foreach ($groupids as $gid) {
+				$all_groupids[(string) $gid] = true;
+			}
+
+			$selected_groups = API::HostGroup()->get([
+				'output' => ['groupid', 'name'],
+				'groupids' => $groupids
+			]);
+
+			$child_prefixes = [];
+
+			foreach ($selected_groups as $g) {
+				$child_prefixes[] = $g['name'].'/';
+			}
+
+			if ($child_prefixes) {
+				$nested_groups = API::HostGroup()->get([
+					'output' => ['groupid'],
+					'search' => ['name' => $child_prefixes],
+					'startSearch' => true,
+					'searchByAny' => true
+				]);
+
+				foreach ($nested_groups as $g) {
+					$all_groupids[(string) $g['groupid']] = true;
+				}
+			}
+
 			$group_hosts = API::Host()->get([
 				'output' => ['hostid'],
-				'groupids' => $groupids,
+				'groupids' => array_keys($all_groupids),
 				'monitored_hosts' => true,
 				'preservekeys' => true
 			]);

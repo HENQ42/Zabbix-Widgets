@@ -29,13 +29,16 @@ $render_value = function ($value, $real_value, $toggleable, $value_class, $is_li
 			->setAttribute('href', $href)
 			->setAttribute('target', '_blank')
 			->setAttribute('rel', 'noopener noreferrer')
+			->setAttribute('title', (string) $value)
 			->addClass($value_class)
 			->addClass('hmacro-value-link');
 
 		return [$link];
 	}
 
-	$span = (new CSpan($value))->addClass($value_class);
+	$span = (new CSpan($value))
+		->addClass($value_class)
+		->setAttribute('title', (string) $value);
 
 	if (!$toggleable) {
 		return [$span];
@@ -56,25 +59,23 @@ $render_value = function ($value, $real_value, $toggleable, $value_class, $is_li
 };
 
 $css = <<<CSS
+	/* Light theme (default). Background is always transparent so the widget
+	   inherits the dashboard background; only text/separator colors change. */
 	.hmacro-wrap {
-		--hmacro-bg: #ffffff;
-		--hmacro-card-bg: #ffffff;
-		--hmacro-border: #e0e0e0;
 		--hmacro-text: #1f2328;
 		--hmacro-subtle: #586069;
-		--hmacro-row-hover: #f6f8fa;
-		--hmacro-shadow: 0 1px 3px rgba(0,0,0,0.06);
-		--hmacro-stripe: #e9ecef;
+		--hmacro-border: rgba(0, 0, 0, 0.10);
+		--hmacro-row-hover: rgba(0, 0, 0, 0.035);
+		--hmacro-stripe: rgba(0, 0, 0, 0.025);
+		--hmacro-toolbar-bg: rgba(255, 255, 255, 0.45);
 	}
 	:root[color-scheme="dark"] .hmacro-wrap {
-		--hmacro-bg: transparent;
-		--hmacro-card-bg: #ededed;
-		--hmacro-border: #bfc6cb;
-		--hmacro-text: #1f2328;
-		--hmacro-subtle: #6a737d;
-		--hmacro-row-hover: #dde1e4;
-		--hmacro-shadow: 0 1px 3px rgba(0,0,0,0.2);
-		--hmacro-stripe: #d4d9dc;
+		--hmacro-text: #dfe3e7;
+		--hmacro-subtle: #9aa0a6;
+		--hmacro-border: rgba(255, 255, 255, 0.12);
+		--hmacro-row-hover: rgba(255, 255, 255, 0.06);
+		--hmacro-stripe: rgba(255, 255, 255, 0.04);
+		--hmacro-toolbar-bg: rgba(58, 62, 68, 0.45);
 	}
 	.hmacro-wrap {
 		height: 100%;
@@ -83,6 +84,7 @@ $css = <<<CSS
 		padding: 12px;
 		box-sizing: border-box;
 		color: var(--hmacro-text);
+		background: transparent;
 	}
 
 	/* --- Error / empty --- */
@@ -98,15 +100,15 @@ $css = <<<CSS
 
 	/* --- Single host mode --- */
 	.hmacro-single {
-		background: var(--hmacro-card-bg);
-		border: 1px solid var(--hmacro-border);
-		border-radius: 8px;
-		box-shadow: var(--hmacro-shadow);
+		background: transparent;
+		border: none;
+		border-radius: 0;
+		box-shadow: none;
 		overflow: hidden;
 	}
 	.hmacro-host-header {
-		padding: 10px 16px;
-		font-size: 14px;
+		padding: 8px 16px;
+		font-size: 12px;
 		font-weight: 700;
 		color: #ffffff;
 		letter-spacing: 0.3px;
@@ -179,12 +181,6 @@ $css = <<<CSS
 	.hmacro-value-link:hover {
 		text-decoration: none;
 	}
-	.hmacro-macro-desc {
-		font-size: 11px;
-		color: var(--hmacro-subtle);
-		font-style: italic;
-		margin-top: 2px;
-	}
 	.hmacro-type-badge {
 		display: inline-block;
 		padding: 1px 6px;
@@ -204,13 +200,11 @@ $css = <<<CSS
 		border: 0 !important;
 		outline: none !important;
 		box-shadow: none !important;
-		background-color: transparent !important;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586069' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: center;
-		background-size: 14px;
+		background-color: var(--hmacro-subtle);
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") no-repeat center / 14px;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") no-repeat center / 14px;
 		cursor: pointer;
-		opacity: 0.5;
+		opacity: 0.6;
 		vertical-align: middle;
 		transition: opacity 0.15s ease;
 		user-select: none;
@@ -225,8 +219,9 @@ $css = <<<CSS
 	}
 	.hmacro-eye:hover { opacity: 1; }
 	.hmacro-eye.is-shown {
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586069' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E");
-		opacity: 0.75;
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E") no-repeat center / 14px;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E") no-repeat center / 14px;
+		opacity: 0.85;
 	}
 	.hmacro-count {
 		font-size: 11px;
@@ -240,8 +235,15 @@ $css = <<<CSS
 		justify-content: flex-start;
 		align-items: center;
 		gap: 6px;
-		margin-bottom: 8px;
 		min-height: 24px;
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		margin: -12px -12px 8px;
+		padding: 12px 12px 8px;
+		background: var(--hmacro-toolbar-bg);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 	}
 	.hmacro-search-toggle {
 		display: inline-block;
@@ -251,13 +253,11 @@ $css = <<<CSS
 		border: 0 !important;
 		outline: none !important;
 		box-shadow: none !important;
-		background-color: transparent !important;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23586069' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: center;
-		background-size: 16px;
+		background-color: var(--hmacro-subtle);
+		-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat center / 16px;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat center / 16px;
 		cursor: pointer;
-		opacity: 0.55;
+		opacity: 0.6;
 		transition: opacity 0.15s ease;
 	}
 	.hmacro-search-toggle:hover { opacity: 1; }
@@ -287,7 +287,7 @@ $css = <<<CSS
 		opacity: 1;
 		pointer-events: auto;
 		border-color: var(--hmacro-border);
-		background: var(--hmacro-card-bg);
+		background: transparent;
 	}
 	.hmacro-search-input:focus {
 		outline: none;
@@ -300,6 +300,12 @@ $css = <<<CSS
 		display: grid;
 		gap: 12px;
 		align-content: start;
+	}
+	.hmacro-grid .hmacro-single {
+		border-bottom: 1px solid var(--hmacro-border);
+	}
+	.hmacro-grid .hmacro-single:last-child {
+		border-bottom: none;
 	}
 	.hmacro-host-name {
 		color: var(--hmacro-subtle);
@@ -383,7 +389,7 @@ if ($view_mode === 0) {
 		$row = (new CDiv())->addClass('hmacro-row');
 
 		// Macro name + type badge.
-		$name_parts = [(new CSpan($macro['macro']))];
+		$name_parts = [(new CSpan($macro['macro']))->setAttribute('title', (string) $macro['macro'])];
 
 		if ((int) $macro['type'] === 1) {
 			$name_parts[] = (new CSpan('Secret'))
@@ -408,10 +414,6 @@ if ($view_mode === 0) {
 			$macro['link_prefix'] ?? '',
 			$macro['link_suffix'] ?? ''
 		);
-
-		if ($macro['description'] !== '') {
-			$value_parts[] = (new CDiv($macro['description']))->addClass('hmacro-macro-desc');
-		}
 
 		$value_cell = (new CDiv($value_parts))->addClass('hmacro-macro-value-wrap');
 
@@ -496,7 +498,8 @@ elseif ($view_mode === 1) {
 		$row = (new CDiv())->addClass('hmacro-row');
 
 		$name_cell = (new CDiv($data['macro_name']))
-			->addClass('hmacro-macro-name');
+			->addClass('hmacro-macro-name')
+			->setAttribute('title', (string) $data['macro_name']);
 
 		if ($host_entry['value'] !== null) {
 			$value_parts = $render_value(
@@ -593,7 +596,7 @@ elseif ($view_mode === 2) {
 		foreach ($host_entry['macros'] as $macro) {
 			$row = (new CDiv())->addClass('hmacro-row');
 
-			$name_parts = [(new CSpan($macro['macro']))];
+			$name_parts = [(new CSpan($macro['macro']))->setAttribute('title', (string) $macro['macro'])];
 
 			if ((int) $macro['type'] === 1) {
 				$name_parts[] = (new CSpan('Secret'))
@@ -617,10 +620,6 @@ elseif ($view_mode === 2) {
 				$macro['link_prefix'] ?? '',
 				$macro['link_suffix'] ?? ''
 			);
-
-			if ($macro['description'] !== '') {
-				$value_parts[] = (new CDiv($macro['description']))->addClass('hmacro-macro-desc');
-			}
 
 			$value_cell = (new CDiv($value_parts))->addClass('hmacro-macro-value-wrap');
 
