@@ -410,21 +410,21 @@ else {
 	$grid_columns = 'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));';
 
 	// Duas seções FIXAS, fora dos tipos definidos pelo usuário:
-	//  - "Sites Instáveis": sempre primeira. Precedência sobre tudo — um site crítico OU instável sai do
-	//    seu tipo (ou de "sem tipo") e sobe pra cá.
-	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo (e que estão estáveis).
-	$unstable_def = ['name' => _('Sites Instáveis'), 'color' => $color_critical];
+	//  - "Sites Instáveis": sempre primeira (sem bolinha de cor). Precedência — um site instável sai do
+	//    seu tipo (ou de "sem tipo") e sobe pra cá. Sites críticos NÃO sobem: ficam na seção do seu tipo.
+	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo que não estão instáveis.
+	$unstable_def = ['name' => _('Sites Instáveis'), 'color' => ''];
 	$unidentified_def = ['name' => _('Sem Identificação'), 'color' => '6B7280'];
 
-	$unstable = []; // cards de sites críticos ou instáveis (qualquer tipo)
+	$unstable = []; // cards de sites instáveis (qualquer tipo)
 	$buckets = [];  // índice do tipo => [cards]
-	$untyped = [];  // cards sem tipo (e estáveis)
+	$untyped = [];  // cards sem tipo (e não instáveis)
 	foreach ($data['sites'] as $site) {
 		$card = $build_card($site);
 
-		// Crítico e instável têm precedência: ignoram o tipo e vão para a seção do topo.
+		// Instável tem precedência: ignora o tipo e vai para a seção do topo.
 		$site_state = (string) ($site['state'] ?? '');
-		if ($site_state === 'critical' || $site_state === 'unstable') {
+		if ($site_state === 'unstable') {
 			$unstable[] = $card;
 			continue;
 		}
@@ -459,7 +459,7 @@ else {
 		]))->addClass('hggrid-section');
 	};
 
-	// 1) Seção fixa "Sites Instáveis" (topo): SEMPRE presente — quando não há nenhum site crítico/instável,
+	// 1) Seção fixa "Sites Instáveis" (topo): SEMPRE presente — quando não há nenhum site instável,
 	// aparece mesmo assim com contagem (0).
 	$grid->addItem($build_section($unstable_def, $unstable));
 
