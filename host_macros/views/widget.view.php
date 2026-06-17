@@ -239,8 +239,8 @@ $css = <<<CSS
 		position: sticky;
 		top: 0;
 		z-index: 2;
-		margin: -12px -12px 8px;
-		padding: 12px 12px 8px;
+		margin: -12px -12px 18px;
+		padding: 12px 12px 10px;
 		background: var(--hmacro-toolbar-bg);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
