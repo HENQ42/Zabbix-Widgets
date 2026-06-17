@@ -280,24 +280,22 @@ else {
 
 		$header_items = [$site_num];
 
-		// Sites críticos saem do seu "tipo de site" e sobem para a seção fixa "Em Estado Crítico". Para não
-		// perder de vista de onde o site veio, exibimos aqui — à esquerda da badge de status — uma badge com
-		// o nome do tipo de origem, pintada com a cor salva daquele tipo (fundo num tom claro + texto na cor
-		// cheia da mesma). Sites sem tipo de origem (vinham de "Sem Identificação", sem cor salva) ficam
-		// sem essa badge.
-		if ($state === 'critical') {
-			$origin_index = $site['type_index'] ?? null;
-			if ($origin_index !== null && isset($site_types[$origin_index])) {
-				$origin = $site_types[$origin_index];
-				$origin_color = ($origin['color'] ?? '') !== '' ? $origin['color'] : '6B7280';
-				$origin_bg = $lighten($origin_color, 0.75);
-				$origin_text = $darken($origin_color, 0.35);
+		// Todo site com tipo definido exibe — à esquerda da badge de status — uma badge com a SIGLA do seu
+		// tipo, pintada com a cor salva daquele tipo (fundo num tom claro + texto na cor cheia da mesma).
+		// Quando a sigla não foi preenchida (predefinições antigas), cai no nome do tipo. Sites sem tipo
+		// (vão para "Sem Identificação", sem cor salva) ficam sem essa badge.
+		$origin_index = $site['type_index'] ?? null;
+		if ($origin_index !== null && isset($site_types[$origin_index])) {
+			$origin = $site_types[$origin_index];
+			$origin_sigla = ($origin['sigla'] ?? '') !== '' ? $origin['sigla'] : $origin['name'];
+			$origin_color = ($origin['color'] ?? '') !== '' ? $origin['color'] : '6B7280';
+			$origin_bg = $lighten($origin_color, 0.75);
+			$origin_text = $darken($origin_color, 0.35);
 
-				$header_items[] = (new CSpan($origin['name']))
-					->addClass('hggrid-origin-badge')
-					->addStyle('background-color: #'.$origin_bg.'; color: #'.$origin_text.';')
-					->setAttribute('title', _('Origem').': '.$origin['name']);
-			}
+			$header_items[] = (new CSpan($origin_sigla))
+				->addClass('hggrid-origin-badge')
+				->addStyle('background-color: #'.$origin_bg.'; color: #'.$origin_text.';')
+				->setAttribute('title', $origin['name']);
 		}
 
 		$header_items[] = $status_badge;
@@ -407,21 +405,22 @@ else {
 	$grid_columns = 'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));';
 
 	// Duas seções FIXAS, fora dos tipos definidos pelo usuário:
-	//  - "Em Estado Crítico": sempre primeira. Precedência sobre tudo — um site crítico sai do seu tipo
-	//    (ou de "sem tipo") e sobe pra cá.
-	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo (e que não estão críticos).
-	$critical_def = ['name' => _('Em Estado Crítico'), 'color' => $color_critical];
+	//  - "Sites Instáveis": sempre primeira. Precedência sobre tudo — um site crítico OU instável sai do
+	//    seu tipo (ou de "sem tipo") e sobe pra cá.
+	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo (e que estão estáveis).
+	$unstable_def = ['name' => _('Sites Instáveis'), 'color' => $color_critical];
 	$unidentified_def = ['name' => _('Sem Identificação'), 'color' => '6B7280'];
 
-	$critical = []; // cards de sites em estado crítico (qualquer tipo)
+	$unstable = []; // cards de sites críticos ou instáveis (qualquer tipo)
 	$buckets = [];  // índice do tipo => [cards]
-	$untyped = [];  // cards sem tipo (e não-críticos)
+	$untyped = [];  // cards sem tipo (e estáveis)
 	foreach ($data['sites'] as $site) {
 		$card = $build_card($site);
 
-		// Crítico tem precedência: ignora o tipo e vai para a seção do topo.
-		if ((string) ($site['state'] ?? '') === 'critical') {
-			$critical[] = $card;
+		// Crítico e instável têm precedência: ignoram o tipo e vão para a seção do topo.
+		$site_state = (string) ($site['state'] ?? '');
+		if ($site_state === 'critical' || $site_state === 'unstable') {
+			$unstable[] = $card;
 			continue;
 		}
 
@@ -453,9 +452,9 @@ else {
 		]))->addClass('hggrid-section');
 	};
 
-	// 1) Seção fixa "Em Estado Crítico" (topo): SEMPRE presente — quando não há nenhum crítico, aparece
-	// mesmo assim com contagem (0).
-	$grid->addItem($build_section($critical_def, $critical));
+	// 1) Seção fixa "Sites Instáveis" (topo): SEMPRE presente — quando não há nenhum site crítico/instável,
+	// aparece mesmo assim com contagem (0).
+	$grid->addItem($build_section($unstable_def, $unstable));
 
 	// 2) Tipos definidos pelo usuário, na ordem das configurações; pula tipos sem nenhum site visível.
 	foreach ($site_types as $idx => $type_def) {

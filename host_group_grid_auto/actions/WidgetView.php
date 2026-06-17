@@ -444,7 +444,11 @@ class WidgetView extends CControllerDashboardWidgetView {
 				continue;
 			}
 			$idx = count($site_types);
-			$site_types[$idx] = ['name' => $type_name, 'color' => (string) ($row['color'] ?? '')];
+			$site_types[$idx] = [
+				'name' => $type_name,
+				'sigla' => trim((string) ($row['sigla'] ?? '')),
+				'color' => (string) ($row['color'] ?? '')
+			];
 
 			foreach (preg_split('/[\s,]+/', (string) ($row['sites'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) as $tok) {
 				$key = $this->normalizeSiteToken($tok);

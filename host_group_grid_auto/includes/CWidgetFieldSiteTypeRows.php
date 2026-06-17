@@ -19,6 +19,7 @@ class CWidgetFieldSiteTypeRows extends CWidgetField {
 
 	public const DEFAULT_ROW = [
 		'name' => '',
+		'sigla' => '',
 		'color' => '',
 		'sites' => ''
 	];
@@ -30,6 +31,8 @@ class CWidgetFieldSiteTypeRows extends CWidgetField {
 			->setDefault(self::DEFAULT_VALUE)
 			->setValidationRules(['type' => API_OBJECTS, 'fields' => [
 				'name' => ['type' => API_STRING_UTF8, 'length' => 255],
+				// Sigla curta exibida na badge de cada site (ex.: "PF" para "Posto fiscal").
+				'sigla' => ['type' => API_STRING_UTF8, 'length' => 32],
 				'color' => ['type' => API_COLOR, 'flags' => API_ALLOW_NULL],
 				// Lista de identificadores de site separados por vírgula/espaço (ex.: "03, 07, CENTRO").
 				// Mantida como texto cru no widget_field; a normalização para array acontece ao montar a predefinição.
@@ -55,6 +58,7 @@ class CWidgetFieldSiteTypeRows extends CWidgetField {
 
 			$rows[] = [
 				'name' => $name,
+				'sigla' => trim((string) ($row['sigla'] ?? '')),
 				'color' => (string) ($row['color'] ?? ''),
 				'sites' => $sites
 			];
@@ -69,6 +73,11 @@ class CWidgetFieldSiteTypeRows extends CWidgetField {
 				'type' => ZBX_WIDGET_FIELD_TYPE_STR,
 				'name' => $this->name.'.'.$i.'.name',
 				'value' => $row['name']
+			];
+			$widget_fields[] = [
+				'type' => ZBX_WIDGET_FIELD_TYPE_STR,
+				'name' => $this->name.'.'.$i.'.sigla',
+				'value' => $row['sigla']
 			];
 			$widget_fields[] = [
 				'type' => ZBX_WIDGET_FIELD_TYPE_STR,

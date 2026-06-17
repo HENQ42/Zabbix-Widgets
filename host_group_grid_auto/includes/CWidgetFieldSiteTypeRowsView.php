@@ -157,6 +157,7 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 					var out = [];
 					table.querySelectorAll("tr.form_row").forEach(function(tr) {
 						var n = tr.querySelector(\'input[name$="[name]"]\');
+						var g = tr.querySelector(\'input[name$="[sigla]"]\');
 						var c = tr.querySelector(\'input[name$="[color]"]\');
 						var s = tr.querySelector(\'input[name$="[sites]"]\');
 						var nameVal = n ? n.value.trim() : "";
@@ -164,6 +165,7 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 						if (nameVal === "" && sitesVal === "") return;
 						out.push({
 							name: nameVal,
+							sigla: g ? g.value.trim() : "",
 							color: c ? c.value.trim() : "",
 							sites: sitesVal.split(/[\s,]+/).filter(function(x) { return x !== ""; })
 						});
@@ -181,9 +183,11 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 						var tr = rows[rows.length - 1];
 						if (!tr) return;
 						var n = tr.querySelector(\'input[name$="[name]"]\');
+						var g = tr.querySelector(\'input[name$="[sigla]"]\');
 						var c = tr.querySelector(\'input[name$="[color]"]\');
 						var s = tr.querySelector(\'input[name$="[sites]"]\');
 						if (n) { n.value = t.name || ""; }
+						if (g) { g.value = t.sigla || ""; }
 						if (s) { s.value = (t.sites || []).join(", "); }
 						if (c) {
 							c.value = t.color || "";
@@ -444,6 +448,7 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 		$prefix = $name.'['.$row_num.']';
 
 		$type_name = $data['name'] ?? '';
+		$sigla = $data['sigla'] ?? '';
 		$color = $data['color'] ?? '';
 		$sites = $data['sites'] ?? '';
 
@@ -455,6 +460,13 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 			new CDiv(
 				(new CTextBox($prefix.'[name]', $type_name, false))
 					->setAttribute('placeholder', _('Ex.: Pórtico de fronteira'))
+					->setWidth(ZBX_TEXTAREA_SMALL_WIDTH)
+			),
+
+			new CLabel(_('Sigla'), zbx_formatDomId($prefix.'[sigla]')),
+			new CDiv(
+				(new CTextBox($prefix.'[sigla]', $sigla, false))
+					->setAttribute('placeholder', _('Ex.: PF'))
 					->setWidth(ZBX_TEXTAREA_SMALL_WIDTH)
 			),
 
