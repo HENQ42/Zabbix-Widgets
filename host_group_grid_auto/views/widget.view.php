@@ -63,7 +63,12 @@ else {
 			color: var(--hggrid-text);
 			padding-bottom: 6px;
 			border-bottom: 1px solid var(--hggrid-header-border);
+			cursor: pointer;
+			user-select: none;
 		}
+		.hggrid-section-caret { flex-shrink: 0; font-size: 10px; opacity: 0.55; transition: transform 0.15s ease; }
+		.hggrid-section.collapsed .hggrid-section-caret { transform: rotate(-90deg); }
+		.hggrid-section.collapsed .hggrid-wrap { display: none; }
 		.hggrid-section-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
 		.hggrid-section-name { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 		.hggrid-section-count { font-weight: 600; opacity: 0.5; font-variant-numeric: tabular-nums; }
@@ -438,6 +443,8 @@ else {
 	// Monta uma seção titulada (bolinha com a cor + nome + contagem) com os cards num grid auto-fit.
 	$build_section = static function (array $type_def, array $cards) use ($grid_columns): CDiv {
 		$title_items = [];
+		// Setinha indicadora do estado recolhido/expandido (clicar no título alterna; ver class.widget.js).
+		$title_items[] = (new CSpan('▾'))->addClass('hggrid-section-caret');
 		if (($type_def['color'] ?? '') !== '') {
 			$title_items[] = (new CDiv())
 				->addClass('hggrid-section-dot')

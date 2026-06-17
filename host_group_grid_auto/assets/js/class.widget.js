@@ -4,6 +4,9 @@ class CWidgetHostGroupGridAuto extends CWidget {
     #drilldown = null;
     #openSiteId = null;
     #observer = null;
+    // Nomes das seções atualmente recolhidas. Sobrevive aos refreshes de conteúdo (que recriam o DOM),
+    // reaplicado em #applyCollapsedState() — o usuário não vê as seções reabrirem a cada ciclo.
+    #collapsedSections = new Set();
 
     #isDrilldownAlive() {
         if (!this.#drilldown) return false;
@@ -18,6 +21,23 @@ class CWidgetHostGroupGridAuto extends CWidget {
     #onBodyClick = (e) => {
         // Host-name link inside the drill-down — let the browser navigate normally.
         if (e.target.closest && e.target.closest('.hggrid-host-link')) {
+            return;
+        }
+
+        // Clique no título de uma seção: recolhe/expande os cards dela (toggle da classe `collapsed`).
+        const sectionTitle = e.target.closest && e.target.closest('.hggrid-section-title');
+        if (sectionTitle) {
+            const section = sectionTitle.closest('.hggrid-section');
+            if (section) {
+                const key = this.#sectionKey(section);
+                const collapsed = section.classList.toggle('collapsed');
+                if (collapsed) {
+                    this.#collapsedSections.add(key);
+                }
+                else {
+                    this.#collapsedSections.delete(key);
+                }
+            }
             return;
         }
 
@@ -54,11 +74,14 @@ class CWidgetHostGroupGridAuto extends CWidget {
 
     onActivate() {
         this._body.addEventListener('click', this.#onBodyClick);
+        this.#applyCollapsedState();
 
         // After a widget content refresh, Zabbix replaces this._body's children — the drill-down
         // div is wiped along with everything else. Watch for that and re-open it so the user
-        // doesn't get bounced back to the main grid each refresh cycle.
+        // doesn't get bounced back to the main grid each refresh cycle. The collapsed sections are
+        // recreated expanded by the fresh render, so we reapply their state here too.
         this.#observer = new MutationObserver(() => {
+            this.#applyCollapsedState();
             if (this.#openSiteId && !this.#isDrilldownAlive()) {
                 const detail = this.#getSiteDetail(this.#openSiteId);
                 if (detail) {
@@ -67,6 +90,20 @@ class CWidgetHostGroupGridAuto extends CWidget {
             }
         });
         this.#observer.observe(this._body, { childList: true });
+    }
+
+    // Chave de uma seção para lembrar o estado recolhido: o texto do seu nome (ex.: "Sites Instáveis").
+    #sectionKey(section) {
+        const nameEl = section.querySelector('.hggrid-section-name');
+        return nameEl ? nameEl.textContent.trim() : '';
+    }
+
+    // Reaplica a classe `collapsed` às seções cujo nome está no conjunto de recolhidas.
+    #applyCollapsedState() {
+        if (!this._body) return;
+        this._body.querySelectorAll('.hggrid-section').forEach((section) => {
+            section.classList.toggle('collapsed', this.#collapsedSections.has(this.#sectionKey(section)));
+        });
     }
 
     onDeactivate() {
