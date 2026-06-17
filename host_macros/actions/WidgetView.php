@@ -24,12 +24,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 		}
 		$macro_filter = trim((string) ($this->fields_values['macro_filter'] ?? ''));
 		$hidden_macros_raw = trim((string) ($this->fields_values['hidden_macros'] ?? ''));
-		$columns = (int) ($this->fields_values['columns'] ?? 4);
+		$link_macros_raw = trim((string) ($this->fields_values['link_macros'] ?? ''));
 		$header_color = (string) ($this->fields_values['header_color'] ?? '1976D2');
-
-		if ($columns < 1) {
-			$columns = 1;
-		}
 
 		// Build set of macro names whose values must be masked. Accepts "{$NAME}"
 		// or just "NAME"; comma-separated.
@@ -44,13 +40,49 @@ class WidgetView extends CControllerDashboardWidgetView {
 			}
 		}
 
+		// Build a map of macro names whose values must be rendered as clickable
+		// links. Each entry is a link template where "{$NAME}" is a placeholder
+		// replaced by the macro value; whatever surrounds it (scheme, port, path)
+		// is literal. Examples:
+		//   "{$TESTE}:80"            -> "<value>:80"      (http:// added below)
+		//   "https://{$TESTE}:8443"  -> "https://<value>:8443"
+		// Bare "NAME" / "NAME:80" also work (no leading placeholder needed).
+		// Map value = ['prefix' => ..., 'suffix' => ...].
+		$link_set = [];
+
+		foreach (explode(',', $link_macros_raw) as $entry) {
+			$entry = trim($entry);
+
+			if ($entry === '') {
+				continue;
+			}
+
+			if (preg_match('#^(.*?)\{\$([^}]+)\}(.*)$#', $entry, $m)) {
+				$prefix = $m[1];
+				$name = strtoupper(trim($m[2]));
+				$suffix = $m[3];
+			}
+			elseif (preg_match('#^([^:/]+)(.*)$#', $entry, $m)) {
+				$prefix = '';
+				$name = strtoupper(trim($m[1]));
+				$suffix = $m[2];
+			}
+			else {
+				continue;
+			}
+
+			if ($name !== '') {
+				$link_set['{$'.$name.'}'] = ['prefix' => $prefix, 'suffix' => $suffix];
+			}
+		}
+
 		// Build a macro entry. Returns:
 		//   value      — what gets displayed (masked when hidden)
 		//   real_value — original value (only when user-hidden and reveal-able)
 		//   hidden     — whether the value is currently masked
 		//   toggleable — whether a click can reveal the real value
 		// type 1 (Zabbix Secret) cannot be revealed because the API doesn't return the real value.
-		$build_entry = static function (array $m) use ($hidden_set): array {
+		$build_entry = static function (array $m) use ($hidden_set, $link_set): array {
 			$type = (int) $m['type'];
 			$macro_name = (string) $m['macro'];
 			$value = (string) ($m['value'] ?? '');
@@ -58,6 +90,8 @@ class WidgetView extends CControllerDashboardWidgetView {
 			$is_secret = ($type === 1);
 			$is_hidden = $is_user_hidden || $is_secret;
 			$toggleable = $is_user_hidden && !$is_secret;
+			$macro_key = strtoupper($macro_name);
+			$is_link = isset($link_set[$macro_key]) && !$is_hidden;
 
 			return [
 				'macro' => $macro_name,
@@ -65,6 +99,9 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'real_value' => $toggleable ? $value : null,
 				'hidden' => $is_hidden,
 				'toggleable' => $toggleable,
+				'is_link' => $is_link,
+				'link_prefix' => $is_link ? $link_set[$macro_key]['prefix'] : '',
+				'link_suffix' => $is_link ? $link_set[$macro_key]['suffix'] : '',
 				'type' => $type,
 				'description' => $m['description'] ?? ''
 			];
@@ -77,7 +114,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 			'macros' => [],
 			'hosts' => [],
 			'macro_name' => $macro_filter,
-			'columns' => $columns,
 			'header_color' => $header_color,
 			'error' => '',
 			'user' => ['debug_mode' => $this->getDebugMode()]
@@ -174,7 +210,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 				'macros' => $host_macros,
 				'hosts' => [],
 				'macro_name' => $macro_filter,
-				'columns' => $columns,
 				'header_color' => $header_color,
 				'error' => '',
 				'user' => ['debug_mode' => $this->getDebugMode()]
@@ -221,7 +256,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 					'macros' => [],
 					'hosts' => $output_hosts,
 					'macro_name' => '',
-					'columns' => $columns,
 					'header_color' => $header_color,
 					'error' => '',
 					'user' => ['debug_mode' => $this->getDebugMode()]
@@ -254,6 +288,9 @@ class WidgetView extends CControllerDashboardWidgetView {
 						'real_value' => $macro_data ? $macro_data['real_value'] : null,
 						'hidden' => $macro_data ? $macro_data['hidden'] : false,
 						'toggleable' => $macro_data ? $macro_data['toggleable'] : false,
+						'is_link' => $macro_data ? $macro_data['is_link'] : false,
+						'link_prefix' => $macro_data ? $macro_data['link_prefix'] : '',
+						'link_suffix' => $macro_data ? $macro_data['link_suffix'] : '',
 						'type' => $macro_data ? $macro_data['type'] : null,
 						'description' => $macro_data ? $macro_data['description'] : ''
 					];
@@ -266,7 +303,6 @@ class WidgetView extends CControllerDashboardWidgetView {
 					'macros' => [],
 					'hosts' => $output_hosts,
 					'macro_name' => $normalized,
-					'columns' => $columns,
 					'header_color' => $header_color,
 					'error' => '',
 					'user' => ['debug_mode' => $this->getDebugMode()]

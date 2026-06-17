@@ -5,7 +5,6 @@ namespace Modules\HostMacros\Includes;
 use Zabbix\Widgets\{CWidgetField, CWidgetForm};
 use Zabbix\Widgets\Fields\{
 	CWidgetFieldColor,
-	CWidgetFieldIntegerBox,
 	CWidgetFieldMultiSelectGroup,
 	CWidgetFieldMultiSelectHost,
 	CWidgetFieldMultiSelectOverrideHost,
@@ -38,8 +37,8 @@ class WidgetForm extends CWidgetForm {
 					->setDefault('')
 			)
 			->addField(
-				(new CWidgetFieldIntegerBox('columns', _('Columns'), 1, 12))
-					->setDefault(4)
+				(new CWidgetFieldTextBox('link_macros', _('Macros as links (comma-separated)')))
+					->setDefault('')
 			)
 			->addField(
 				(new CWidgetFieldColor('header_color', _('Header color')))

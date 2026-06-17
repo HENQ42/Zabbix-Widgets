@@ -11,16 +11,22 @@ $view = new CWidgetView($data);
 
 $view_mode = (int) ($data['view_mode'] ?? 0);
 $header_color = ($data['header_color'] !== '') ? $data['header_color'] : '1976D2';
-$columns = (int) ($data['columns'] ?? 4);
 
 // Returns an array: [value-span] or [value-span, eye-button] when toggleable.
-$render_value = function ($value, $real_value, $toggleable, $value_class) {
-	$is_url = !$toggleable && is_string($value)
-		&& preg_match('#^https?://\S+#i', (string) $value) === 1;
+// When $is_link is set (macro configured as a link), the value is rendered as
+// a clickable anchor. The link target is built from a template:
+// $link_prefix.$value.$link_suffix (e.g. "https://" + value + ":8443"). Only
+// when the result has no http(s):// scheme is http:// prepended. The displayed
+// text is always the original value, untouched by prefix/suffix.
+$render_value = function ($value, $real_value, $toggleable, $value_class, $is_link = false, $link_prefix = '', $link_suffix = '') {
+	if ($is_link && !$toggleable && is_string($value) && trim($value) !== '') {
+		$target = $link_prefix.$value.$link_suffix;
+		$href = (preg_match('#^https?://#i', $target) === 1)
+			? $target
+			: 'http://'.$target;
 
-	if ($is_url) {
 		$link = (new CTag('a', true, $value))
-			->setAttribute('href', $value)
+			->setAttribute('href', $href)
 			->setAttribute('target', '_blank')
 			->setAttribute('rel', 'noopener noreferrer')
 			->addClass($value_class)
@@ -397,7 +403,10 @@ if ($view_mode === 0) {
 			$macro['value'],
 			$macro['real_value'] ?? null,
 			!empty($macro['toggleable']),
-			'hmacro-macro-value'
+			'hmacro-macro-value',
+			!empty($macro['is_link']),
+			$macro['link_prefix'] ?? '',
+			$macro['link_suffix'] ?? ''
 		);
 
 		if ($macro['description'] !== '') {
@@ -457,7 +466,7 @@ elseif ($view_mode === 1) {
 
 	$grid = (new CDiv())
 		->addClass('hmacro-grid')
-		->addStyle('grid-template-columns: repeat('.$columns.', minmax(0, 1fr));');
+		->addStyle('grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));');
 
 	foreach ($data['hosts'] as $host_entry) {
 		$card = (new CDiv())
@@ -494,7 +503,10 @@ elseif ($view_mode === 1) {
 				$host_entry['value'],
 				$host_entry['real_value'] ?? null,
 				!empty($host_entry['toggleable']),
-				'hmacro-group-value'
+				'hmacro-group-value',
+				!empty($host_entry['is_link']),
+				$host_entry['link_prefix'] ?? '',
+				$host_entry['link_suffix'] ?? ''
 			);
 		}
 		else {
@@ -545,7 +557,7 @@ elseif ($view_mode === 2) {
 
 	$grid = (new CDiv())
 		->addClass('hmacro-grid')
-		->addStyle('grid-template-columns: repeat('.$columns.', minmax(0, 1fr));');
+		->addStyle('grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));');
 
 	foreach ($data['hosts'] as $host_entry) {
 		if (empty($host_entry['macros'])) {
@@ -600,7 +612,10 @@ elseif ($view_mode === 2) {
 				$macro['value'],
 				$macro['real_value'] ?? null,
 				!empty($macro['toggleable']),
-				'hmacro-macro-value'
+				'hmacro-macro-value',
+				!empty($macro['is_link']),
+				$macro['link_prefix'] ?? '',
+				$macro['link_suffix'] ?? ''
 			);
 
 			if ($macro['description'] !== '') {
