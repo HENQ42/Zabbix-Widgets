@@ -1196,14 +1196,20 @@ class CWidgetScriptRunner extends CWidget {
 		if (details.timed_out) {
 			parts.push('interrompido por timeout');
 		}
+		if (details.stdout_truncated) {
+			parts.push('stdout truncado em ' + details.output_limit_bytes + ' bytes');
+		}
+		if (details.stderr_truncated) {
+			parts.push('stderr truncado em ' + details.output_limit_bytes + ' bytes');
+		}
 		meta.textContent = parts.join('  |  ');
 		wrap.appendChild(meta);
 
 		if (details.stdout && details.stdout.trim() !== '') {
-			wrap.appendChild(this._renderStream('stdout', details.stdout));
+			wrap.appendChild(this._renderStream(details.stdout_truncated ? 'stdout (truncado)' : 'stdout', details.stdout));
 		}
 		if (details.stderr && details.stderr.trim() !== '') {
-			wrap.appendChild(this._renderStream('stderr', details.stderr));
+			wrap.appendChild(this._renderStream(details.stderr_truncated ? 'stderr (truncado)' : 'stderr', details.stderr));
 		}
 
 		return wrap;

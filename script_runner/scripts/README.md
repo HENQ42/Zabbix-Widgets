@@ -179,6 +179,10 @@ emit({"ok": True, "message": "Feito.", "details": {"alvo": args.alvo}}, 0)
 - `slug` e `id` da ação validados contra o que foi descoberto/declarado (anti path
   traversal e anti ação forjada). Manifests com referências inválidas são ignorados.
 - Parâmetros validados contra o schema **antes** de executar; timeout por script.
+- Saída de `stdout` e `stderr` limitada no servidor; truncamento é marcado nos detalhes.
+- Execuções paralelas são bloqueadas por trava server-side por usuário/script/host.
+- Em sistemas com `setsid`, o timeout tenta encerrar o grupo de processos para atingir
+  subprocessos criados pelo script.
 - Toda execução é auditada em `/var/lib/zabbix-ui/script_runner/audit.log` (valores
   originais, com `{$X}` literal e campos secretos mascarados).
 

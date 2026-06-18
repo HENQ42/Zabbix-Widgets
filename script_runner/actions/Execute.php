@@ -22,14 +22,20 @@ use Modules\ScriptRunner\Includes\CScriptRunnerAccess;
  *  - Parametros validados contra o schema (apenas os campos da acao) ANTES de executar.
  *  - proc_open com ARRAY de argumentos (sem shell): cada valor de campo vira UM argumento,
  *    nunca interpolado em linha de comando -> zero parsing de shell sobre dado do usuario.
- *  - Timeout por script; processo travado e terminado.
+ *  - Saida limitada por stream; timeout por script com tentativa de matar o grupo de processos.
+ *  - Trava server-side por usuario/script/host para evitar execucoes paralelas acidentais.
  *  - Auditoria best-effort com os valores ORIGINAIS (pre-resolucao) e secret mascarado.
  */
 class Execute extends CController {
 
 	private const AUDIT_DIR = '/var/lib/zabbix-ui/script_runner';
 	private const AUDIT_FILE = '/var/lib/zabbix-ui/script_runner/audit.log';
+	private const LOCK_DIR = '/var/lib/zabbix-ui/script_runner/locks';
+	private const OUTPUT_LIMIT_BYTES = 1048576;
+	private const PIPE_READ_BYTES = 8192;
+	private const SETSID_BIN = '/usr/bin/setsid';
 	private const SECRET_PLACEHOLDER_PREFIX = '__ZBX_SR_SECRET_';
+	private const JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
 
 	protected function init(): void {
 		// CSRF e verificado manualmente em checkInput() contra o grupo "widget".
@@ -161,11 +167,25 @@ class Execute extends CController {
 		$argv = CScriptCatalog::buildArgv($meta, $action, $validation['values']);
 		$protected = $this->protectSecretArgv($argv, $secret_values);
 
-		$run = $this->runScript($meta, $protected['argv'], $protected['secret_map']);
+		$lock = $this->acquireExecutionLock($meta, $hostid);
+		if (!$lock['ok']) {
+			$this->respond([
+				'ok' => false,
+				'error' => $lock['error']
+			]);
+			return;
+		}
 
-		$this->audit($meta, $action, $hostid, $original_params, $run);
+		try {
+			$run = $this->runScript($meta, $protected['argv'], $protected['secret_map']);
+			$this->audit($meta, $action, $hostid, $original_params, $run);
+			$response = $this->buildResult($meta, $run, $secret_values);
+		}
+		finally {
+			$this->releaseExecutionLock($lock);
+		}
 
-		$this->respond($this->buildResult($meta, $run, $secret_values));
+		$this->respond($response);
 	}
 
 	/**
@@ -180,11 +200,6 @@ class Execute extends CController {
 		return false;
 	}
 
-	/**
-	 * Executa o script com proc_open (sem shell), passando os argumentos ja montados.
-	 *
-	 * @return array exit_code, stdout, stderr, duration_ms, timed_out, spawn_error
-	 */
 	private function protectSecretArgv(array $argv, array $secret_values): array {
 		$secret_map = [];
 		$safe_argv = $argv;
@@ -211,6 +226,62 @@ class Execute extends CController {
 		return ['argv' => $safe_argv, 'secret_map' => $secret_map];
 	}
 
+	private function acquireExecutionLock(array $meta, string $hostid): array {
+		if (!is_dir(self::LOCK_DIR) && !@mkdir(self::LOCK_DIR, 0750, true) && !is_dir(self::LOCK_DIR)) {
+			return [
+				'ok' => false,
+				'error' => 'Nao foi possivel preparar a trava de execucao.'
+			];
+		}
+
+		$userid = (string) (CWebUser::$data['userid'] ?? 'unknown');
+		$key = hash('sha256', $userid."\0".(string) $meta['slug']."\0".$hostid);
+		$path = self::LOCK_DIR.'/'.$key.'.lock';
+		$handle = @fopen($path, 'c');
+
+		if (!is_resource($handle)) {
+			return [
+				'ok' => false,
+				'error' => 'Nao foi possivel abrir a trava de execucao.'
+			];
+		}
+
+		if (!flock($handle, LOCK_EX | LOCK_NB)) {
+			fclose($handle);
+			return [
+				'ok' => false,
+				'error' => 'Ja existe uma execucao em andamento para este usuario, script e host.'
+			];
+		}
+
+		ftruncate($handle, 0);
+		fwrite($handle, json_encode([
+			'ts' => date('c'),
+			'userid' => $userid,
+			'script' => $meta['slug'],
+			'hostid' => $hostid !== '' ? $hostid : null
+		], self::JSON_FLAGS));
+
+		return [
+			'ok' => true,
+			'handle' => $handle,
+			'path' => $path
+		];
+	}
+
+	private function releaseExecutionLock(array $lock): void {
+		if (isset($lock['handle']) && is_resource($lock['handle'])) {
+			flock($lock['handle'], LOCK_UN);
+			fclose($lock['handle']);
+		}
+	}
+
+	/**
+	 * Executa o script com proc_open (sem shell), passando os argumentos ja montados.
+	 *
+	 * @return array exit_code, stdout, stderr, duration_ms, timed_out, spawn_error,
+	 *               stdout_truncated, stderr_truncated, process_group
+	 */
 	private function runScript(array $meta, array $argv, array $secret_map = []): array {
 		if ($secret_map) {
 			$wrapper = realpath(__DIR__.'/../includes/secret_argv_wrapper.py');
@@ -221,7 +292,10 @@ class Execute extends CController {
 					'stdout' => '',
 					'stderr' => 'Wrapper de execucao segura nao encontrado.',
 					'duration_ms' => 0,
-					'timed_out' => false
+					'timed_out' => false,
+					'stdout_truncated' => false,
+					'stderr_truncated' => false,
+					'process_group' => false
 				];
 			}
 
@@ -229,6 +303,12 @@ class Execute extends CController {
 		}
 		else {
 			$cmd = array_merge([CScriptCatalog::INTERPRETER, $meta['entrypoint']], $argv);
+		}
+
+		$process_group = false;
+		if (is_executable(self::SETSID_BIN) && function_exists('posix_kill')) {
+			$cmd = array_merge([self::SETSID_BIN], $cmd);
+			$process_group = true;
 		}
 
 		$descriptors = [
@@ -253,12 +333,15 @@ class Execute extends CController {
 				'stdout' => '',
 				'stderr' => '',
 				'duration_ms' => 0,
-				'timed_out' => false
+				'timed_out' => false,
+				'stdout_truncated' => false,
+				'stderr_truncated' => false,
+				'process_group' => $process_group
 			];
 		}
 
 		if ($secret_map) {
-			fwrite($pipes[0], json_encode($secret_map, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+			fwrite($pipes[0], json_encode($secret_map, self::JSON_FLAGS));
 		}
 		// O script recebe os dados por argv; stdin e usado apenas pelo wrapper de segredos.
 		fclose($pipes[0]);
@@ -268,19 +351,17 @@ class Execute extends CController {
 
 		$stdout = '';
 		$stderr = '';
+		$stdout_truncated = false;
+		$stderr_truncated = false;
 		$exit_code = null;
 		$timed_out = false;
 		$deadline = $started + $meta['timeout'];
+		$status = proc_get_status($proc);
+		$proc_pid = (int) ($status['pid'] ?? 0);
 
 		while (true) {
-			$chunk = stream_get_contents($pipes[1]);
-			if ($chunk !== false && $chunk !== '') {
-				$stdout .= $chunk;
-			}
-			$chunk = stream_get_contents($pipes[2]);
-			if ($chunk !== false && $chunk !== '') {
-				$stderr .= $chunk;
-			}
+			$this->readPipeLimited($pipes[1], $stdout, $stdout_truncated);
+			$this->readPipeLimited($pipes[2], $stderr, $stderr_truncated);
 
 			$status = proc_get_status($proc);
 			if (!$status['running']) {
@@ -290,12 +371,7 @@ class Execute extends CController {
 
 			if (microtime(true) >= $deadline) {
 				$timed_out = true;
-				proc_terminate($proc, 15); // SIGTERM
-				usleep(300000);
-				$status = proc_get_status($proc);
-				if ($status['running']) {
-					proc_terminate($proc, 9); // SIGKILL
-				}
+				$this->terminateProcess($proc, $proc_pid, $process_group);
 				break;
 			}
 
@@ -303,8 +379,10 @@ class Execute extends CController {
 		}
 
 		// Drena o que restou nos buffers.
-		$stdout .= (string) stream_get_contents($pipes[1]);
-		$stderr .= (string) stream_get_contents($pipes[2]);
+		while ($this->readPipeLimited($pipes[1], $stdout, $stdout_truncated)) {
+		}
+		while ($this->readPipeLimited($pipes[2], $stderr, $stderr_truncated)) {
+		}
 		fclose($pipes[1]);
 		fclose($pipes[2]);
 
@@ -319,8 +397,51 @@ class Execute extends CController {
 			'stdout' => $stdout,
 			'stderr' => $stderr,
 			'duration_ms' => (int) round((microtime(true) - $started) * 1000),
-			'timed_out' => $timed_out
+			'timed_out' => $timed_out,
+			'stdout_truncated' => $stdout_truncated,
+			'stderr_truncated' => $stderr_truncated,
+			'process_group' => $process_group
 		];
+	}
+
+	private function readPipeLimited($pipe, string &$buffer, bool &$truncated): bool {
+		$remaining = self::OUTPUT_LIMIT_BYTES - strlen($buffer);
+		$length = $remaining > 0 ? min(self::PIPE_READ_BYTES, $remaining + 1) : self::PIPE_READ_BYTES;
+		$chunk = stream_get_contents($pipe, $length);
+
+		if ($chunk === false || $chunk === '') {
+			return false;
+		}
+
+		if ($remaining <= 0) {
+			$truncated = true;
+			return true;
+		}
+
+		if (strlen($chunk) > $remaining) {
+			$buffer .= substr($chunk, 0, $remaining);
+			$truncated = true;
+			return true;
+		}
+
+		$buffer .= $chunk;
+		return true;
+	}
+
+	private function terminateProcess($proc, int $pid, bool $process_group): void {
+		if ($process_group && $pid > 0 && function_exists('posix_kill')) {
+			@posix_kill(-$pid, 15); // SIGTERM para o grupo inteiro.
+			usleep(300000);
+			@posix_kill(-$pid, 9); // SIGKILL para filhos que ignoraram SIGTERM.
+			return;
+		}
+
+		proc_terminate($proc, 15); // SIGTERM
+		usleep(300000);
+		$status = proc_get_status($proc);
+		if ($status['running']) {
+			proc_terminate($proc, 9); // SIGKILL
+		}
 	}
 
 	/**
@@ -331,6 +452,9 @@ class Execute extends CController {
 			'exit_code' => $run['exit_code'],
 			'duration_ms' => $run['duration_ms'],
 			'timed_out' => $run['timed_out'],
+			'stdout_truncated' => !empty($run['stdout_truncated']),
+			'stderr_truncated' => !empty($run['stderr_truncated']),
+			'output_limit_bytes' => self::OUTPUT_LIMIT_BYTES,
 			'stdout' => $this->redactText($run['stdout'], $secret_values),
 			'stderr' => $this->redactText($run['stderr'], $secret_values)
 		];
@@ -347,6 +471,14 @@ class Execute extends CController {
 			return [
 				'ok' => false,
 				'error' => 'Tempo limite de '.$meta['timeout'].'s excedido. A execucao foi interrompida.',
+				'details' => $details
+			];
+		}
+
+		if (!empty($run['stdout_truncated']) || !empty($run['stderr_truncated'])) {
+			return [
+				'ok' => false,
+				'error' => 'A saida do script excedeu o limite de '.self::OUTPUT_LIMIT_BYTES.' bytes por stream e foi truncada.',
 				'details' => $details
 			];
 		}
@@ -434,8 +566,10 @@ class Execute extends CController {
 			'params' => CScriptCatalog::redactForAudit($meta, $original_params),
 			'exit_code' => $run['exit_code'],
 			'timed_out' => $run['timed_out'],
+			'stdout_truncated' => !empty($run['stdout_truncated']),
+			'stderr_truncated' => !empty($run['stderr_truncated']),
 			'duration_ms' => $run['duration_ms']
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		], self::JSON_FLAGS);
 
 		if (!is_dir(self::AUDIT_DIR)) {
 			@mkdir(self::AUDIT_DIR, 0750, true);
@@ -446,7 +580,7 @@ class Execute extends CController {
 
 	private function respond(array $payload): void {
 		$this->setResponse(new CControllerResponseData([
-			'main_block' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+			'main_block' => json_encode($payload, self::JSON_FLAGS)
 		]));
 	}
 }
