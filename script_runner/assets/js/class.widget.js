@@ -222,7 +222,12 @@ class CWidgetScriptRunner extends CWidget {
 		body.set('search', term);
 		body.set('_csrf_token', this._csrf);
 
-		this._postJson(curl, body)
+		fetch(curl.getUrl(), {
+			method: 'POST',
+			headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+			body: body.toString()
+		})
+			.then((resp) => resp.json())
 			.then((data) => this._renderHostResults(data.ok ? (data.hosts || []) : []))
 			.catch(() => this._renderHostResults([]));
 	}
@@ -298,7 +303,12 @@ class CWidgetScriptRunner extends CWidget {
 		body.set('hostid', this._hostid);
 		body.set('_csrf_token', this._csrf);
 
-		this._postJson(curl, body)
+		fetch(curl.getUrl(), {
+			method: 'POST',
+			headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+			body: body.toString()
+		})
+			.then((resp) => resp.json())
 			.then((data) => {
 				if (!data.ok) {
 					this._macros_box.innerHTML = '';
@@ -1047,90 +1057,36 @@ class CWidgetScriptRunner extends CWidget {
 		body.set('params', JSON.stringify(this._collectParamsForAction(script, action)));
 		body.set('_csrf_token', this._csrf);
 
-		this._postJson(curl, body)
-			.then((data) => this._renderResult(data))
-			.catch((err) => this._renderResult(err && err.ok === false ? err : {
+		fetch(curl.getUrl(), {
+			method: 'POST',
+			headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+			body: body.toString()
+		})
+			.then((resp) => resp.text().then((text) => ({status: resp.status, ok: resp.ok, text})))
+			.then((res) => {
+				let data;
+				try {
+					data = JSON.parse(res.text);
+				}
+				catch (e) {
+					// Resposta nao e JSON: provavel erro do servidor (HTML de acesso negado,
+					// sessao expirada, fatal do PHP). Mostra status + trecho para diagnostico.
+					const snippet = (res.text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+					this._renderResult({
+						ok: false,
+						error: 'O servidor nao respondeu em JSON (HTTP ' + res.status + ').',
+						details: {exit_code: null, duration_ms: 0, timed_out: false,
+							stdout: '', stderr: snippet || '(resposta vazia)'}
+					});
+					return;
+				}
+				this._renderResult(data);
+			})
+			.catch(() => this._renderResult({
 				ok: false,
 				error: 'Falha de comunicacao com o servidor (a requisicao nao completou).'
 			}))
 			.finally(() => this._setRunning(false));
-	}
-
-	_postJson(curl, body) {
-		return fetch(curl.getUrl(), {
-			method: 'POST',
-			headers: {
-				'Accept': 'application/json, text/plain, */*',
-				'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-				'X-Requested-With': 'XMLHttpRequest'
-			},
-			body: body.toString()
-		})
-			.then((resp) => resp.text().then((text) => {
-				let data;
-
-				try {
-					data = JSON.parse(text);
-				}
-				catch (e) {
-					throw this._makeNonJsonError(resp.status, text);
-				}
-
-				return this._normalizeAjaxPayload(data, resp.status);
-			}));
-	}
-
-	_normalizeAjaxPayload(data, status) {
-		if (data && data.error && !Object.prototype.hasOwnProperty.call(data, 'ok')) {
-			return {
-				ok: false,
-				error: this._formatZabbixError(data.error),
-				details: {
-					exit_code: null,
-					duration_ms: 0,
-					timed_out: false,
-					stdout: '',
-					stderr: 'HTTP ' + status
-				}
-			};
-		}
-
-		return data;
-	}
-
-	_formatZabbixError(error) {
-		if (typeof error === 'string') {
-			return error;
-		}
-
-		if (error && typeof error === 'object') {
-			const parts = [];
-			if (error.title) {
-				parts.push(error.title);
-			}
-			if (Array.isArray(error.messages)) {
-				parts.push(error.messages.join(' '));
-			}
-			return parts.join(' ').trim() || 'Erro retornado pelo Zabbix.';
-		}
-
-		return 'Erro retornado pelo Zabbix.';
-	}
-
-	_makeNonJsonError(status, text) {
-		const snippet = (text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
-
-		return {
-			ok: false,
-			error: 'O servidor nao respondeu em JSON (HTTP ' + status + ').',
-			details: {
-				exit_code: null,
-				duration_ms: 0,
-				timed_out: false,
-				stdout: '',
-				stderr: snippet || '(resposta vazia)'
-			}
-		};
 	}
 
 	_renderResultPending() {
