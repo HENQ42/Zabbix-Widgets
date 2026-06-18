@@ -64,7 +64,14 @@ class WidgetView extends CControllerDashboardWidgetView {
 	/**
 	 * Resolve user macro values for a host, walking up the template chain.
 	 * Host-level value wins; otherwise the nearest template level wins.
-	 * Secret macros (type 1) have no value in the API response and resolve to ''.
+	 *
+	 * The macro values are read straight from the `hostmacro` table instead of
+	 * through the API, because the API (and the UI) strip the `value` field of
+	 * Secret macros (type 1) by design. Secret macros are still stored as plain
+	 * text in `hostmacro.value`, so the DB read returns the real credential.
+	 * (Vault macros, type 2, would yield a vault path here — not a value — but
+	 * the camera hosts use type 1.) The template chain is still walked via the
+	 * API, since that traversal never needs the secret value itself.
 	 *
 	 * @return array  macro name ({$NAME}) => value
 	 */
@@ -75,12 +82,11 @@ class WidgetView extends CControllerDashboardWidgetView {
 		$is_host_level = true;
 
 		while ($level_ids && count($resolved) < count($wanted)) {
-			$macros = API::UserMacro()->get([
-				'output' => ['macro', 'value'],
-				'hostids' => $level_ids
-			]);
+			$res = DBselect(
+				'SELECT macro,value FROM hostmacro WHERE '.dbConditionId('hostid', $level_ids)
+			);
 
-			foreach ($macros as $m) {
+			while ($m = DBfetch($res)) {
 				$macro = strtoupper($m['macro']);
 
 				if (in_array($macro, $wanted, true) && !array_key_exists($macro, $resolved)) {

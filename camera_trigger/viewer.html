@@ -103,7 +103,7 @@
 
 	const base = (cfg.base || '').replace(/\/+$/, '');
 	const hostid = cfg.hostid || '';
-	const timeoutMs = (parseInt(cfg.timeout, 10) || 15) * 1000;
+	const timeoutMs = (parseInt(cfg.timeout, 10) || 60) * 1000;
 	// viewer.html mora em modules/camera_trigger/ → ../../ = raiz da UI.
 	const storeUrl = '../../zabbix.php?action=widget.camera_trigger.image&hostid=' + encodeURIComponent(hostid);
 

@@ -41,8 +41,8 @@ class WidgetForm extends CWidgetForm {
 					->setMaxLength(255)
 			)
 			->addField(
-				(new CWidgetFieldIntegerBox('trigger_timeout', _('Trigger timeout (seconds)'), 1, 120))
-					->setDefault(15)
+				(new CWidgetFieldIntegerBox('trigger_timeout', _('Trigger timeout (seconds)'), 1, 300))
+					->setDefault(60)
 			)
 			->addField(
 				(new CWidgetFieldIntegerBox('refresh_sec', _('Auto refresh (seconds, 0 = off)'), 0, 3600))
