@@ -1,0 +1,70 @@
+{
+    "name": "Echo de Diagnostico",
+    "summary": "Script de teste inofensivo: valida e ecoa os parametros, sem tocar em nenhuma maquina.",
+    "alert": {
+        "level": "info",
+        "title": "O que este script faz",
+        "message": "Apenas devolve os parametros recebidos. Serve para validar todo o fluxo do widget: formulario, acoes (botoes), preview do comando, execucao, sucesso, erro e timeout. Nao acessa nenhum host nem altera nada."
+    },
+    "isactive": true,
+    "timeout": 15,
+    "fields": [
+        {
+            "name": "mensagem",
+            "label": "Mensagem",
+            "type": "text",
+            "required": true,
+            "maxlength": 200,
+            "placeholder": "Digite um texto para ser ecoado",
+            "help": "Texto obrigatorio que sera devolvido pelo script. Aceita referencias de macro, ex: {$HOST.NAME}."
+        },
+        {
+            "name": "nivel",
+            "label": "Nivel",
+            "type": "select",
+            "default": "info",
+            "options": [
+                { "value": "info", "label": "Informativo" },
+                { "value": "aviso", "label": "Aviso" },
+                { "value": "erro", "label": "Erro" }
+            ],
+            "help": "Exemplo de campo de selecao com opcoes fixas."
+        },
+        {
+            "name": "repeticoes",
+            "label": "Repeticoes",
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "max": 5,
+            "help": "Quantas vezes a mensagem sera repetida (1 a 5). Opcional: se vazio, o script usa o padrao."
+        }
+    ],
+    "actions": [
+        {
+            "id": "eco",
+            "title": "Ecoar mensagem",
+            "description": "Devolve a mensagem informada, repetida conforme o campo Repeticoes.",
+            "uses": ["mensagem", "nivel", "repeticoes"],
+            "args": ["--mensagem={mensagem}", "--nivel={nivel}", "--repeticoes={repeticoes}"],
+            "danger": "low"
+        },
+        {
+            "id": "falha",
+            "title": "Simular falha",
+            "description": "Roda o script forcando um erro proposital (exit 1) para testar o tratamento de erros.",
+            "uses": ["mensagem"],
+            "args": ["--mensagem={mensagem}", "--falhar"],
+            "danger": "medium"
+        },
+        {
+            "id": "timeout",
+            "title": "Simular timeout",
+            "description": "Trava o script de proposito para testar o limite de tempo (o widget interrompe).",
+            "uses": [],
+            "args": ["--travar"],
+            "danger": "high",
+            "confirm": true
+        }
+    ]
+}

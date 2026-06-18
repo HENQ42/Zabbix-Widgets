@@ -1,0 +1,37 @@
+{
+    "manifest_version": 2.0,
+    "id": "script_runner",
+    "type": "widget",
+    "name": "Executor de Scripts",
+    "namespace": "ScriptRunner",
+    "version": "1.0",
+    "description": "Interface administrativa para executar scripts customizados, cada um com seu proprio formulario. Acesso restrito (Super Admin + grupo de usuarios autorizado). Nunca atualiza sozinho.",
+    "author": "Custom",
+    "actions": {
+        "widget.script_runner.view": {
+            "class": "WidgetView",
+            "view": "widget.view"
+        },
+        "widget.script_runner.execute": {
+            "class": "Execute",
+            "layout": "layout.json"
+        },
+        "widget.script_runner.macros": {
+            "class": "Macros",
+            "layout": "layout.json"
+        },
+        "widget.script_runner.hosts": {
+            "class": "Hosts",
+            "layout": "layout.json"
+        }
+    },
+    "widget": {
+        "name": "Executor de Scripts",
+        "js_class": "CWidgetScriptRunner",
+        "refresh_rate": 0,
+        "size": { "width": 24, "height": 12 }
+    },
+    "assets": {
+        "js": ["class.widget.js"]
+    }
+}
