@@ -976,7 +976,7 @@ class CWidgetScriptRunner extends CWidget {
 			return;
 		}
 
-		if (action.confirm) {
+		if (action.confirm || action.danger === 'high') {
 			this._confirm(script, action, () => this._execute(script, action));
 		}
 		else {
@@ -985,15 +985,16 @@ class CWidgetScriptRunner extends CWidget {
 	}
 
 	_confirm(script, action, onConfirm) {
+		const is_high_risk = action.danger === 'high';
 		const overlay = document.createElement('div');
-		overlay.className = 'sr-modal-overlay';
+		overlay.className = 'sr-modal-overlay' + (is_high_risk ? ' sr-modal-overlay-danger' : '');
 
 		const modal = document.createElement('div');
-		modal.className = 'sr-modal';
+		modal.className = 'sr-modal' + (is_high_risk ? ' sr-modal-danger' : '');
 
 		const title = document.createElement('div');
 		title.className = 'sr-modal-title';
-		title.textContent = 'Confirmar execucao';
+		title.textContent = is_high_risk ? 'Confirmar acao de alto risco' : 'Confirmar execucao';
 		modal.appendChild(title);
 
 		const body = document.createElement('div');
@@ -1001,6 +1002,31 @@ class CWidgetScriptRunner extends CWidget {
 		body.textContent = 'Voce esta prestes a executar "' + action.title + '" do script "' + script.name + '"'
 			+ (action.danger === 'high' ? ' (ALTO RISCO)' : '') + '. Deseja continuar?';
 		modal.appendChild(body);
+
+		if (is_high_risk) {
+			const warning = document.createElement('div');
+			warning.className = 'sr-modal-warning';
+
+			const warning_title = document.createElement('div');
+			warning_title.className = 'sr-modal-warning-title';
+			warning_title.textContent = action.title;
+			warning.appendChild(warning_title);
+
+			const warning_msg = document.createElement('div');
+			warning_msg.className = 'sr-modal-warning-msg';
+			warning_msg.textContent = action.description
+				|| 'Esta acao foi marcada como alto risco. Revise os parametros antes de continuar.';
+			warning.appendChild(warning_msg);
+
+			if (script.alert && script.alert.message) {
+				const script_msg = document.createElement('div');
+				script_msg.className = 'sr-modal-warning-note';
+				script_msg.textContent = script.alert.message;
+				warning.appendChild(script_msg);
+			}
+
+			modal.appendChild(warning);
+		}
 
 		const actions = document.createElement('div');
 		actions.className = 'sr-modal-actions';
@@ -1031,7 +1057,8 @@ class CWidgetScriptRunner extends CWidget {
 			}
 		});
 
-		this._body.appendChild(overlay);
+		const root = this._body ? this._body.querySelector('.script-runner') : null;
+		(root || this._body || document.body).appendChild(overlay);
 	}
 
 	_setRunning(running) {
@@ -1223,6 +1250,7 @@ class CWidgetScriptRunner extends CWidget {
 	--sr-surface-soft: #f9fbfe;
 	--sr-input-bg: #fff;
 	--sr-popover-bg: #fff;
+	--sr-modal-bg: rgba(255,255,255,.92);
 	--sr-accent: #1976d2;
 	--sr-accent-strong: #145ca8;
 	--sr-accent-soft-bg: #e7f0fb;
@@ -1268,6 +1296,7 @@ html[theme="dark-theme"] .script-runner {
 	--sr-surface-soft: #232a34;
 	--sr-input-bg: #1f2630;
 	--sr-popover-bg: #2b3340;
+	--sr-modal-bg: rgba(43,51,64,.92);
 	--sr-accent: #4ea1f0;
 	--sr-accent-strong: #6cb4f5;
 	--sr-accent-soft-bg: #2a3a4d;
@@ -1307,6 +1336,7 @@ html[theme="hc-dark"] .script-runner {
 	--sr-surface-soft: #181818;
 	--sr-input-bg: #000;
 	--sr-popover-bg: #1a1a1a;
+	--sr-modal-bg: rgba(26,26,26,.94);
 	--sr-accent: #5ab0ff;
 	--sr-accent-strong: #7cc0ff;
 	--sr-accent-soft-bg: #10243a;
@@ -1444,10 +1474,16 @@ html[theme="hc-dark"] .script-runner {
 .sr-macro-source { font-size: 10px; text-transform: uppercase; color: var(--sr-faint); background: var(--sr-card-bg); padding: 1px 5px; border-radius: 8px; }
 .script-runner .sr-macro-insert { -webkit-appearance: none; appearance: none; display: inline-block; width: auto; height: auto; min-height: 0; box-sizing: border-box; background: var(--sr-accent-soft-bg); border: 1px solid var(--sr-accent-soft-border); color: var(--sr-accent); border-radius: 4px; margin: 0; padding: 2px 8px; font-size: 11px; line-height: 1.3; cursor: pointer; font-family: inherit; }
 .script-runner .sr-macro-insert:hover { background: var(--sr-card-hover-bg); }
-.sr-modal-overlay { position: fixed; inset: 0; background: var(--sr-overlay); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.sr-modal { background: var(--sr-popover-bg); color: var(--sr-fg); border-radius: 8px; padding: 20px; max-width: 460px; width: 90%; box-shadow: 0 12px 40px var(--sr-shadow-strong); }
+.sr-modal-overlay { position: fixed; inset: 0; background: var(--sr-overlay); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 18px; box-sizing: border-box; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.sr-modal-overlay-danger { background: rgba(32,8,8,.72); }
+.sr-modal { background: var(--sr-modal-bg); color: var(--sr-fg); border: 1px solid var(--sr-border-strong); border-radius: 8px; padding: 20px; max-width: 500px; width: min(500px, 100%); box-shadow: 0 12px 40px var(--sr-shadow-strong); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.sr-modal-danger { border-color: var(--sr-high-border); box-shadow: 0 18px 50px var(--sr-shadow-strong), inset 4px 0 0 var(--sr-high-border); }
 .sr-modal-title { font-weight: 700; font-size: 16px; margin-bottom: 10px; color: var(--sr-fg); }
-.sr-modal-body { line-height: 1.4; margin-bottom: 18px; color: var(--sr-muted); }
+.sr-modal-body { line-height: 1.4; margin-bottom: 14px; color: var(--sr-muted); }
+.sr-modal-warning { border: 1px solid var(--sr-danger-border); border-left: 4px solid var(--sr-high-border); border-radius: 6px; background: var(--sr-danger-bg); color: var(--sr-danger-fg); padding: 10px 12px; margin: 0 0 18px; line-height: 1.4; }
+.sr-modal-warning-title { font-weight: 700; margin-bottom: 4px; color: var(--sr-danger-fg); }
+.sr-modal-warning-msg { font-size: 12.5px; }
+.sr-modal-warning-note { font-size: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--sr-danger-border); color: var(--sr-danger-fg); }
 .sr-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 `;
 		document.head.appendChild(style);
