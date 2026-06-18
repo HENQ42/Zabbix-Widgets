@@ -59,20 +59,20 @@ class WidgetView extends CControllerDashboardWidgetView {
 
 			if (preg_match('#^(.*?)\{\$([^}]+)\}(.*)$#', $entry, $m)) {
 				$prefix = $m[1];
-				$name = strtoupper(trim($m[2]));
+				$link_name = strtoupper(trim($m[2]));
 				$suffix = $m[3];
 			}
 			elseif (preg_match('#^([^:/]+)(.*)$#', $entry, $m)) {
 				$prefix = '';
-				$name = strtoupper(trim($m[1]));
+				$link_name = strtoupper(trim($m[1]));
 				$suffix = $m[2];
 			}
 			else {
 				continue;
 			}
 
-			if ($name !== '') {
-				$link_set['{$'.$name.'}'] = ['prefix' => $prefix, 'suffix' => $suffix];
+			if ($link_name !== '') {
+				$link_set['{$'.$link_name.'}'] = ['prefix' => $prefix, 'suffix' => $suffix];
 			}
 		}
 
