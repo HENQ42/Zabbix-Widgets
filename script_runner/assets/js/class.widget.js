@@ -1042,7 +1042,7 @@ class CWidgetScriptRunner extends CWidget {
 
 		const body = new URLSearchParams();
 		body.set('script', script.slug);
-		body.set('action', action.id);
+		body.set('script_action', action.id);
 		body.set('hostid', this._hostid || '');
 		body.set('params', JSON.stringify(this._collectParamsForAction(script, action)));
 		body.set('_csrf_token', this._csrf);

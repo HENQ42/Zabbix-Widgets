@@ -17,7 +17,7 @@ use Modules\ScriptRunner\Includes\CScriptRunnerAccess;
  *  - Autorizacao revalidada no servidor (Super Admin + grupo autorizado).
  *  - CSRF verificado manualmente contra o token do grupo "widget".
  *  - slug validado contra a allowlist descoberta (anti path traversal).
- *  - action validada contra as acoes declaradas no manifest (anti acao forjada).
+ *  - script_action validada contra as acoes declaradas no manifest (anti acao forjada).
  *  - Referencias "{$MACRO}" resolvidas no servidor contra o host selecionado.
  *  - Parametros validados contra o schema (apenas os campos da acao) ANTES de executar.
  *  - proc_open com ARRAY de argumentos (sem shell): cada valor de campo vira UM argumento,
@@ -42,7 +42,7 @@ class Execute extends CController {
 	protected function checkInput(): bool {
 		$fields = [
 			'script' => 'string|required',
-			'action' => 'string|required',
+			'script_action' => 'string|required',
 			'hostid' => 'string',
 			'params' => 'string',
 			CSRF_TOKEN_NAME => 'string'
@@ -66,7 +66,7 @@ class Execute extends CController {
 
 	protected function doAction(): void {
 		$slug = (string) $this->getInput('script');
-		$action_id = (string) $this->getInput('action');
+		$action_id = (string) $this->getInput('script_action');
 		$hostid = trim((string) $this->getInput('hostid', ''));
 
 		try {
