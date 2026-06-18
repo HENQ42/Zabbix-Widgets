@@ -410,22 +410,28 @@ else {
 	$grid_columns = 'grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));';
 
 	// Duas seções FIXAS, fora dos tipos definidos pelo usuário:
-	//  - "Sites Instáveis": sempre primeira (sem bolinha de cor). Precedência — um site instável sai do
-	//    seu tipo (ou de "sem tipo") e sobe pra cá. Sites críticos NÃO sobem: ficam na seção do seu tipo.
-	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo que não estão instáveis.
-	$unstable_def = ['name' => _('Sites Instáveis'), 'color' => ''];
+	//  - "Instáveis": sempre primeira, sem bolinha de cor. Precedência sobre tudo — um site crítico OU
+	//    instável sai do seu tipo (ou de "sem tipo") e sobe pra cá. Dentro dela os críticos vêm primeiro.
+	//  - "Sem Identificação": sempre última. Agrupa os sites sem nenhum tipo (e que estão estáveis).
+	$unstable_def = ['name' => _('Instáveis'), 'color' => ''];
 	$unidentified_def = ['name' => _('Sem Identificação'), 'color' => '6B7280'];
 
-	$unstable = []; // cards de sites instáveis (qualquer tipo)
-	$buckets = [];  // índice do tipo => [cards]
-	$untyped = [];  // cards sem tipo (e não instáveis)
+	$critical_cards = []; // cards de sites críticos (ficam à esquerda na seção "Instáveis")
+	$unstable_cards = []; // cards de sites apenas instáveis (vêm depois dos críticos)
+	$buckets = [];        // índice do tipo => [cards]
+	$untyped = [];        // cards sem tipo (e estáveis)
 	foreach ($data['sites'] as $site) {
 		$card = $build_card($site);
 
-		// Instável tem precedência: ignora o tipo e vai para a seção do topo.
+		// Crítico e instável têm precedência: ignoram o tipo e vão para a seção do topo. Os críticos
+		// entram num balde separado, mesclado antes dos instáveis para sempre aparecerem primeiro.
 		$site_state = (string) ($site['state'] ?? '');
+		if ($site_state === 'critical') {
+			$critical_cards[] = $card;
+			continue;
+		}
 		if ($site_state === 'unstable') {
-			$unstable[] = $card;
+			$unstable_cards[] = $card;
 			continue;
 		}
 
@@ -437,6 +443,9 @@ else {
 			$buckets[$ti][] = $card;
 		}
 	}
+
+	// Críticos primeiro, instáveis depois — a ordem do array é a ordem de renderização no grid.
+	$unstable = array_merge($critical_cards, $unstable_cards);
 
 	$grid = (new CDiv())->addClass('hggrid-scroll');
 
@@ -459,7 +468,7 @@ else {
 		]))->addClass('hggrid-section');
 	};
 
-	// 1) Seção fixa "Sites Instáveis" (topo): SEMPRE presente — quando não há nenhum site instável,
+	// 1) Seção fixa "Instáveis" (topo): SEMPRE presente — quando não há nenhum site crítico/instável,
 	// aparece mesmo assim com contagem (0).
 	$grid->addItem($build_section($unstable_def, $unstable));
 
