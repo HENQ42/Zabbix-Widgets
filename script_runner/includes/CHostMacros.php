@@ -70,7 +70,8 @@ class CHostMacros {
 	 *
 	 * @return array [
 	 *     'values' => [name => valor_resolvido],
-	 *     'errors' => [name => 'mensagem pt-BR'] // macro referenciada inexistente
+	 *     'errors' => [name => 'mensagem pt-BR'], // macro referenciada inexistente
+	 *     'secret_values' => [valor_real_de_macro_secreta, ...]
 	 * ]
 	 * @throws \Exception se o host nao existir ou o usuario nao tiver acesso.
 	 */
@@ -80,6 +81,7 @@ class CHostMacros {
 
 		$out = [];
 		$errors = [];
+		$secret_values = [];
 
 		foreach ($values as $name => $val) {
 			if (!is_string($val) || !self::containsMacroRef($val)) {
@@ -89,9 +91,13 @@ class CHostMacros {
 
 			$missing = [];
 			$resolved = preg_replace_callback(self::MACRO_REF_REGEX,
-				static function (array $m) use ($map, &$missing): string {
+				static function (array $m) use ($map, &$missing, &$secret_values): string {
 					$token = $m[0];
 					if (array_key_exists($token, $map)) {
+						if ($map[$token]['type'] === ZBX_MACRO_TYPE_SECRET
+								|| $map[$token]['type'] === ZBX_MACRO_TYPE_VAULT) {
+							$secret_values[] = (string) $map[$token]['value'];
+						}
 						return (string) $map[$token]['value'];
 					}
 					$missing[] = $token;
@@ -108,7 +114,11 @@ class CHostMacros {
 			}
 		}
 
-		return ['values' => $out, 'errors' => $errors];
+		return [
+			'values' => $out,
+			'errors' => $errors,
+			'secret_values' => array_values(array_unique($secret_values))
+		];
 	}
 
 	/**

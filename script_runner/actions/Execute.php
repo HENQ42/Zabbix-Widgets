@@ -29,6 +29,7 @@ class Execute extends CController {
 
 	private const AUDIT_DIR = '/var/lib/zabbix-ui/script_runner';
 	private const AUDIT_FILE = '/var/lib/zabbix-ui/script_runner/audit.log';
+	private const SECRET_PLACEHOLDER_PREFIX = '__ZBX_SR_SECRET_';
 
 	protected function init(): void {
 		// CSRF e verificado manualmente em checkInput() contra o grupo "widget".
@@ -110,6 +111,7 @@ class Execute extends CController {
 
 		// Valores originais (com "{$X}" literal) para a auditoria.
 		$original_params = $params;
+		$secret_values = [];
 
 		// Resolucao de macros "{$X}" -> valor real, sempre no servidor.
 		if ($this->hasMacroRef($params)) {
@@ -142,6 +144,7 @@ class Execute extends CController {
 			}
 
 			$params = $resolution['values'];
+			$secret_values = $resolution['secret_values'] ?? [];
 		}
 
 		$validation = CScriptCatalog::validateParamsForAction($meta, $action, $params);
@@ -156,12 +159,13 @@ class Execute extends CController {
 		}
 
 		$argv = CScriptCatalog::buildArgv($meta, $action, $validation['values']);
+		$protected = $this->protectSecretArgv($argv, $secret_values);
 
-		$run = $this->runScript($meta, $argv);
+		$run = $this->runScript($meta, $protected['argv'], $protected['secret_map']);
 
 		$this->audit($meta, $action, $hostid, $original_params, $run);
 
-		$this->respond($this->buildResult($meta, $run));
+		$this->respond($this->buildResult($meta, $run, $secret_values));
 	}
 
 	/**
@@ -181,8 +185,51 @@ class Execute extends CController {
 	 *
 	 * @return array exit_code, stdout, stderr, duration_ms, timed_out, spawn_error
 	 */
-	private function runScript(array $meta, array $argv): array {
-		$cmd = array_merge([CScriptCatalog::INTERPRETER, $meta['entrypoint']], $argv);
+	private function protectSecretArgv(array $argv, array $secret_values): array {
+		$secret_map = [];
+		$safe_argv = $argv;
+		$idx = 0;
+		$secret_values = $this->normalizeSecretValues($secret_values);
+
+		foreach ($secret_values as $secret) {
+			$placeholder = self::SECRET_PLACEHOLDER_PREFIX.$idx.'__';
+			$used = false;
+
+			foreach ($safe_argv as $i => $arg) {
+				if (strpos((string) $arg, $secret) !== false) {
+					$safe_argv[$i] = str_replace($secret, $placeholder, (string) $arg);
+					$used = true;
+				}
+			}
+
+			if ($used) {
+				$secret_map[$placeholder] = $secret;
+				$idx++;
+			}
+		}
+
+		return ['argv' => $safe_argv, 'secret_map' => $secret_map];
+	}
+
+	private function runScript(array $meta, array $argv, array $secret_map = []): array {
+		if ($secret_map) {
+			$wrapper = realpath(__DIR__.'/../includes/secret_argv_wrapper.py');
+			if ($wrapper === false || !is_file($wrapper)) {
+				return [
+					'spawn_error' => true,
+					'exit_code' => null,
+					'stdout' => '',
+					'stderr' => 'Wrapper de execucao segura nao encontrado.',
+					'duration_ms' => 0,
+					'timed_out' => false
+				];
+			}
+
+			$cmd = array_merge([CScriptCatalog::INTERPRETER, $wrapper, $meta['entrypoint']], $argv);
+		}
+		else {
+			$cmd = array_merge([CScriptCatalog::INTERPRETER, $meta['entrypoint']], $argv);
+		}
 
 		$descriptors = [
 			0 => ['pipe', 'r'],
@@ -210,7 +257,10 @@ class Execute extends CController {
 			];
 		}
 
-		// O script recebe os dados por argv; nao ha entrada no stdin.
+		if ($secret_map) {
+			fwrite($pipes[0], json_encode($secret_map, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+		}
+		// O script recebe os dados por argv; stdin e usado apenas pelo wrapper de segredos.
 		fclose($pipes[0]);
 
 		stream_set_blocking($pipes[1], false);
@@ -276,13 +326,13 @@ class Execute extends CController {
 	/**
 	 * Traduz o resultado bruto da execucao no contrato consumido pela interface.
 	 */
-	private function buildResult(array $meta, array $run): array {
+	private function buildResult(array $meta, array $run, array $secret_values): array {
 		$details = [
 			'exit_code' => $run['exit_code'],
 			'duration_ms' => $run['duration_ms'],
 			'timed_out' => $run['timed_out'],
-			'stdout' => $run['stdout'],
-			'stderr' => $run['stderr']
+			'stdout' => $this->redactText($run['stdout'], $secret_values),
+			'stderr' => $this->redactText($run['stderr'], $secret_values)
 		];
 
 		if (!empty($run['spawn_error'])) {
@@ -311,6 +361,7 @@ class Execute extends CController {
 			];
 		}
 
+		$decoded = $this->redactData($decoded, $secret_values);
 		$script_ok = ($decoded['ok'] === true) && ($run['exit_code'] === 0);
 
 		return [
@@ -320,6 +371,56 @@ class Execute extends CController {
 			'result' => $decoded,
 			'details' => $details
 		];
+	}
+
+	private function redactData($data, array $secret_values) {
+		if (is_string($data)) {
+			return $this->redactText($data, $secret_values);
+		}
+
+		if (is_array($data)) {
+			foreach ($data as $key => $value) {
+				$data[$key] = $this->redactData($value, $secret_values);
+			}
+		}
+
+		return $data;
+	}
+
+	private function redactText(string $text, array $secret_values): string {
+		foreach ($this->normalizeSecretValues($secret_values) as $secret) {
+			$text = str_replace($secret, '***', $text);
+
+			$encoded = json_encode($secret, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			if (is_string($encoded) && strlen($encoded) >= 2) {
+				$text = str_replace(substr($encoded, 1, -1), '***', $text);
+			}
+
+			$encoded_ascii = json_encode($secret, JSON_UNESCAPED_SLASHES);
+			if (is_string($encoded_ascii) && strlen($encoded_ascii) >= 2) {
+				$text = str_replace(substr($encoded_ascii, 1, -1), '***', $text);
+			}
+		}
+
+		return $text;
+	}
+
+	private function normalizeSecretValues(array $secret_values): array {
+		$out = [];
+
+		foreach ($secret_values as $secret) {
+			$secret = (string) $secret;
+			if ($secret !== '') {
+				$out[$secret] = true;
+			}
+		}
+
+		$out = array_keys($out);
+		usort($out, static function (string $a, string $b): int {
+			return strlen($b) <=> strlen($a);
+		});
+
+		return $out;
 	}
 
 	private function audit(array $meta, array $action, string $hostid, array $original_params, array $run): void {
