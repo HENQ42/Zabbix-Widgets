@@ -13,8 +13,9 @@ use API;
  * enxerga e edita todas (escape hatch). A barreira de permissão é centralizada aqui — nenhuma ação
  * acessa a tabela diretamente.
  *
- * Backend: PostgreSQL (CREATE TABLE IF NOT EXISTS + UPSERT via ON CONFLICT). A chave primária composta
- * (usrgrpid, name) dá a cada grupo seu próprio namespace de nomes e dispensa auto-increment/SERIAL.
+ * Backend: PostgreSQL (CREATE TABLE IF NOT EXISTS). A chave primária composta (usrgrpid, name) dispensa
+ * auto-increment/SERIAL. O save() ainda trata o NOME como único no escopo editável do usuário — salvar o
+ * mesmo nome em outro grupo substitui/move a predefinição em vez de duplicá-la.
  */
 class PresetStore {
 
@@ -99,9 +100,12 @@ class PresetStore {
 	}
 
 	/**
-	 * Cria ou sobrescreve (editar) uma predefinição. UPSERT nativo do PostgreSQL: a colisão na PK
-	 * (usrgrpid, name) atualiza o data. Recusa se o usuário não for membro do grupo dono escolhido
-	 * (e não for Super Admin) — não deixa gravar em grupo do qual não participa.
+	 * Cria ou sobrescreve (editar) uma predefinição. O NOME é o identificador único dentro do escopo que
+	 * o usuário pode editar: antes de gravar, removemos qualquer predefinição de mesmo nome nos grupos
+	 * acessíveis (todos, se Super Admin) e então inserimos no grupo dono escolhido. Assim, salvar o mesmo
+	 * nome com outro grupo SUBSTITUI a predefinição (efetivamente a "move") em vez de duplicá-la. Recusa
+	 * se o usuário não for membro do grupo dono escolhido (e não for Super Admin) — não deixa gravar em
+	 * grupo do qual não participa.
 	 *
 	 * @return bool  true se gravou; false se o usuário não pode escrever nesse grupo
 	 */
@@ -114,10 +118,18 @@ class PresetStore {
 
 		$json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
+		// Remove predefinições homônimas no escopo editável (em qualquer grupo), garantindo um único
+		// registro por nome. Super Admin alcança todos os grupos; demais, apenas os seus.
+		$scope = '';
+		if (!$is_super) {
+			$scope = ' AND '.dbConditionInt('usrgrpid', array_map('intval', $usrgrpids));
+		}
+		DBexecute('DELETE FROM '.self::TABLE.' WHERE name='.zbx_dbstr($name).$scope);
+
 		DBexecute(
 			'INSERT INTO '.self::TABLE.' (usrgrpid,name,data) VALUES ('.
 				$usrgrpid.','.zbx_dbstr($name).','.zbx_dbstr($json).
-			') ON CONFLICT (usrgrpid,name) DO UPDATE SET data=EXCLUDED.data'
+			')'
 		);
 
 		return true;

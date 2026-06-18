@@ -398,6 +398,16 @@ class CWidgetFieldSiteTypeRowsView extends CWidgetFieldView {
 					if (e.target.classList.contains("js-preset-delete")) { e.preventDefault(); onDelete(); }
 				});
 
+				// Ao selecionar uma predefinição, preenche automaticamente o Nome da predefinição e o Grupo dono.
+				if (presetSel) {
+					presetSel.addEventListener("change", function() {
+						var p = selectedPreset();
+						if (!p) return;
+						if (nameInp) { nameInp.value = p.name; }
+						if (usrgrpSel) { usrgrpSel.value = String(p.usrgrpid); }
+					});
+				}
+
 				// Mudou a seleção de sites de uma linha: grava no hidden e recomputa o desabilitado das
 				// demais. Mudou o nome de um tipo: recomputa para atualizar o rótulo do dono.
 				table.addEventListener("change", function(e) {
